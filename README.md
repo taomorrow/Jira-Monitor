@@ -1,4 +1,4 @@
-# Jira Monitor v6.3.0
+# Jira Monitor v6.4.0
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -10,6 +10,14 @@
 4. 打开左侧 **配置中心**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
 
 安装入口：[jiraMonitor.user.js](https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js)。脚本后续更新从本仓库获取。
+
+## 独立交互报告
+
+Sprint 分析完成后点击 **导出交互报告**，获得单文件 HTML。用浏览器打开，点击昨日/今日数字可在下方查看准确的 Jira 明细、摘要及两个时点的状态；支持变化任务、新建任务、项目筛选、编号/摘要搜索和 Jira 链接。报告使用生成时的快照，不连接 Jira API、不要求安装脚本，也不会自动刷新数据。
+
+推送预览中可下载各项目单独的交互报告。勾选 **邮件附交互报告（含 Jira 明细）** 时，邮件载荷包含该项目的 HTML 附件，需按 EMAIL.md 在工作流中配置附件映射。附件包含 Jira 编号、摘要和状态快照；不含 Webhook、收件人或登录凭据。未配置附件映射时，原邮件仍只有卡片正文。
+
+当前实现是可下载 HTML / 邮件附件，不会自动上传报告。若需在邮件中点击在线链接直接进入报告，应另接入有权限控制的内网或文档站点并返回访问地址；邮件正文自身不能执行交互脚本。请将附件下载后用浏览器打开，邮件附件预览不会运行交互。
 
 ## 窗口操作
 
@@ -47,6 +55,7 @@ HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看�
 - `src/timeout.user.js`、`src/sprint.user.js` 保存两仓库原始版本，方便核对计算逻辑。
 - `scripts/build.py` 合并模块作用域、统一面板和通知配置，生成唯一安装文件 `jiraMonitor.user.js`。
 - `src/batch-api.js` 负责 REST 批量扫描、暂停续扫和结果提交；全部筛选通过 Jira Search API 分页，当前分页从可见列表提取编号，Dashboard 从已加载组件提取编号。
+- `src/interactive-report.js` 为独立报告生成器，`src/report-actions.js` 对接分析快照、下载和附件编码。
 - `src/sprint-notify.js` 负责多项目独立预览、目标快照和分别推送。
 - `src/hub.js` 提供窗口、侧边栏、拖动缩放和独立详情容器；`src/mail.js` 提供 Outlook 兼容的表格式 HTML 邮件卡片。
 - `npm ci && npm run build && npm run check && npm test`。

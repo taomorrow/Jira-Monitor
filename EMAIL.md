@@ -51,3 +51,27 @@ equals(triggerBody()?['email']?['enabled'], true)
 ## v6.1.0 卡片格式
 
 超时预警和 Sprint Analysis 的 `email.bodyHtml` 都是带内联样式的 HTML 卡片，含标题、统计表格、Jira 按钮；Sprint 含合计行和正增量标红。邮件动作正文请绑定 `email.bodyHtml` 并作为 HTML 渲染。`email.bodyText` 仅作纯文本备用。无需改变收件人、主题或 Webhook 配置；若原流程已经绑定 bodyHtml，更新脚本即可。
+
+## v6.4.0 独立交互报告附件
+
+Sprint 分析完成后可直接“导出交互报告”。推送时默认勾选“邮件附交互报告（含 Jira 明细）”，脚本会为每个项目单独生成报告，并在 `email.attachments` 中附加：
+
+```json
+{
+  "name": "Jira-Monitor-CSP-时间.html",
+  "contentType": "text/html",
+  "contentBytes": "UTF-8 HTML 的 Base64 字符串"
+}
+```
+
+原工作流不会自动发送新增字段，需配置一次。进入 `email.enabled` 为真的邮件分支，在发送邮件动作前添加 **数据操作 → 选择（Select）**，将其重命名为 `ReportAttachments`：
+
+- From 表达式：`coalesce(triggerBody()?['email']?['attachments'], json('[]'))`
+- 映射键 `Name`，值表达式：`item()?['name']`
+- 映射键 `ContentBytes`，值表达式：`item()?['contentBytes']`
+
+在 **发送电子邮件 (V2)** 的附件参数中切换为输入整个数组，使用表达式 `body('ReportAttachments')`。正文仍绑定 `email.bodyHtml`；收件人与主题沿用已有配置。不要把整个发送邮件动作放到逐附件循环里，避免重复发送邮件。如果触发器使用显式 JSON Schema，需允许 `email.attachments` 数组及上述字段。
+
+附件名称和内容分别对应 Outlook 连接器的 `Name`、`ContentBytes`，参见 [微软 Office 365 Outlook 连接器文档](https://learn.microsoft.com/en-us/connectors/office365/)。
+
+收件人下载 HTML 附件后使用浏览器打开，点击数字就能在页面下方显示工单明细。不需要访问 Jira 就能阅读快照；点击工单链接仍需要对应的 Jira 权限。邮件附件预览不会执行报告脚本。实际邮件投递及企业附件策略需在你的工作流中验证，脚本不会自行上传报告到公共站点。

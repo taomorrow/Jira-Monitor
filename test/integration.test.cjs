@@ -91,7 +91,7 @@ test('multiple projects freeze destinations and send separate reports once, reta
  f.store.get('jira-monitor-projects-v1')[1].webhook='https://changed.logic.azure.com/workflows/new';
  root.getElementById('teams-send').click();root.getElementById('teams-send').click();assert.equal(f.requests.length,1);
  f.requests[0].onload({status:500});await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,2);assert.equal(f.requests[1].url,'https://other.logic.azure.com/workflows/osp');
- for(const [i,key,email] of [[0,'CSP','test@example.com'],[1,'OSPIT','osp@example.com']]){const payload=JSON.parse(f.requests[i].data);assert.equal(payload.projectKey,key);assert.equal(payload.email.to,email);assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);}
+ for(const [i,key,email] of [[0,'CSP','test@example.com'],[1,'OSPIT','osp@example.com']]){const payload=JSON.parse(f.requests[i].data);assert.equal(payload.projectKey,key);assert.equal(payload.email.to,email);assert.equal(payload.email.attachments.length,1);const html=Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString('utf8');const doc=new JSDOM(html).window.document;const snapshot=JSON.parse(doc.querySelector('#report-data').textContent);assert.ok(snapshot.groups.every(g=>g.issues.every(issue=>issue.key.startsWith(key+'-'))));assert.doesNotMatch(html,/api.powerplatform.com|osp@example.com/);assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);}
  f.requests[1].onload({status:202});await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,2);assert.match(root.getElementById('teams-send-status').textContent,/CSP：失败/);assert.match(root.getElementById('teams-send-status').textContent,/OSPIT：已提交/);f.dom.window.close();
 });
 

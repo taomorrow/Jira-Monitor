@@ -1,3 +1,3 @@
 # Jira Monitor
 
-v6.3.0 已统一超时预警与 Sprint Analysis。功能、配置、安装、通知载荷与验证说明以 README.md 为准。
+v6.4.0 已统一超时预警与 Sprint Analysis。功能、配置、安装、通知载荷与验证说明以 README.md 为准。
