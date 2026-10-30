@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.0.0
+// @version      6.1.0
 // @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -20,22 +20,41 @@
 // @run-at       document-idle
 // @noframes
 // ==/UserScript==
-
 (function(){
 'use strict';
-if(window.top!==window.self)return;
-if(document.getElementById('jira-monitor-hub'))return;
+if(window.top!==window.self||document.getElementById('jira-monitor-hub'))return;
 const host=document.createElement('div');host.id='jira-monitor-hub';document.documentElement.append(host);
 const root=host.attachShadow({mode:'open'});
-const style=document.createElement('style');style.textContent=`:host{font:14px Arial;color:#172b4d}button{font:inherit;cursor:pointer;padding:8px 12px;margin:4px;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d}button[aria-selected=true]{background:#0052cc;color:white}#launcher{position:fixed;right:24px;bottom:20px;background:#0052cc;color:white;z-index:2147483646}#shell{position:fixed;inset:4vh 3vw;background:#f7f9fc;border:2px solid #0052cc;border-radius:12px;z-index:2147483646;overflow:auto;box-shadow:0 12px 60px #091e4260}header{position:sticky;top:0;background:#fff;padding:10px;z-index:1;border-bottom:1px solid #ddd;display:flex;align-items:center;flex-wrap:wrap}strong{margin-right:18px}section{padding:12px}[hidden]{display:none!important}`;root.append(style);
-function el(tag,text,parent=root){const node=document.createElement(tag);if(text)node.textContent=text;parent.append(node);return node;}
+const style=document.createElement('style');style.textContent=`
+:host{font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;color:#24334d}*{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}button:focus-visible{outline:3px solid #93b9ff;outline-offset:2px}[hidden]{display:none!important}
+#launcher{position:fixed;right:24px;bottom:20px;background:#245de8;color:white;padding:11px 18px;border-radius:12px;box-shadow:0 6px 20px #245de840;z-index:2147483646;font-weight:600}
+#shell{position:fixed;display:flex;flex-direction:column;background:#f6f8fc;border:1px solid #dbe3f0;border-radius:16px;z-index:2147483646;overflow:hidden;box-shadow:0 20px 70px #1e355b38;min-width:0}
+#titlebar{height:54px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 18px;background:white;border-bottom:1px solid #e8edf5;cursor:move;touch-action:none;user-select:none}#brand-icon{background:#245de8;color:white;border-radius:9px;padding:3px 8px;font-weight:800}#version{font-size:11px;color:#8290a6}#window-close,#detail-close{margin-left:auto;color:#dc3545;background:#fff1f2;border-radius:8px;width:30px;height:30px;line-height:30px;padding:0;font-size:15px}#window-close:hover,#detail-close:hover{background:#ffe1e5}
+#workspace{display:flex;flex:1;min-height:0}nav{width:166px;flex-shrink:0;padding:18px 10px;background:#fff;border-right:1px solid #e8edf5}nav small{display:block;color:#95a0b2;font-size:10px;letter-spacing:1.6px;margin:2px 12px 12px}nav button{display:block;width:100%;text-align:left;padding:11px 12px;margin:4px 0;background:transparent;color:#64738b;border-radius:9px;font-weight:500;white-space:nowrap}nav button:hover{background:#f4f7fc}nav button[aria-selected=true]{background:#eaf0ff;color:#245de8;font-weight:700;box-shadow:inset 3px 0 #245de8}
+main{position:relative;isolation:isolate;flex:1;min-width:0;min-height:0;overflow:hidden}main>section{height:100%;overflow:auto;padding:18px}#timeout-view{padding:0}#resize-grip{z-index:5;position:absolute;bottom:0;right:0;width:22px;height:22px;cursor:nwse-resize;touch-action:none;background:repeating-linear-gradient(135deg,transparent 0 3px,#acbbd3 3px 4px,transparent 4px 6px);clip-path:polygon(100% 0,100% 100%,0 100%);opacity:.65}
+#detail-popup{position:fixed;bottom:76px;right:24px;width:min(420px,calc(100vw - 32px));z-index:2147483647;background:white;border:1px solid #dae3f1;border-radius:14px;box-shadow:0 12px 42px #243c6430;overflow:hidden}#detail-header{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #edf0f6;font-weight:600}#detail-header span{font-size:11px;color:#8694aa;margin-left:8px}#detail-content{max-height:min(480px,65vh);overflow:auto}
+#settings-view h2{font-size:21px;margin:0 0 6px}#settings-view p{color:#718098}#settings-view button{border:1px solid #dbe3f0;border-radius:7px;padding:7px 9px;white-space:nowrap;margin:5px 5px 5px 0;background:white;color:#425778}#settings-view [data-project-save]{background:#245de8;border-color:#245de8;color:white}#settings-view input:not([type=checkbox]),#settings-view textarea{border:1px solid #dce4f0;border-radius:6px;padding:8px;max-width:100%;background:#fbfcff}#settings-view td{padding:10px 6px;vertical-align:top;border-bottom:1px solid #edf1f7}#settings-view th{padding:10px 6px;text-align:left;font-size:11px;color:#718098;background:#f0f4fb}#settings-view table{table-layout:fixed}#settings-view th:first-child{width:90px}#settings-view th:nth-child(4){width:76px}#settings-view th:last-child{width:76px}#settings-view [data-auto-setting]{display:flex;align-items:center;gap:8px;padding:14px;background:#edf3ff;border-radius:10px;margin:16px 0;color:#245de8}
+`;root.append(style);
+function el(tag,text,parent=root){const n=document.createElement(tag);if(text)n.textContent=text;parent.append(n);return n;}
 const launcher=el('button','Jira Monitor');launcher.id='launcher';
-const shell=el('div');shell.id='shell';shell.hidden=true;
-const header=el('header',null,shell);el('strong','Jira Monitor v6.0.0',header);
-const timeoutTab=el('button','超时预警',header),sprintTab=el('button','Sprint Analysis',header),config=el('button','共享 Teams / 邮件配置',header),close=el('button','关闭',header);
-const timeout=el('section',null,shell),sprint=el('section',null,shell);sprint.hidden=true;
-const hub={timeout,sprint,autoDetail:false,show(which='timeout'){shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';timeoutTab.setAttribute('aria-selected',String(which==='timeout'));sprintTab.setAttribute('aria-selected',String(which==='sprint'));},hide(){shell.hidden=true;launcher.focus();}};
-launcher.onclick=()=>hub.show();timeoutTab.onclick=()=>hub.show('timeout');sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();
+const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.1.0',header).id='version';
+const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
+const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
+const timeoutTab=el('button','◷  超时预警',nav),sprintTab=el('button','▥  Sprint Analysis',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';config.id='nav-settings';
+const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';sprint.hidden=settings.hidden=true;
+const grip=el('div',null,shell);grip.id='resize-grip';grip.setAttribute('aria-label','拖动调整窗口大小');
+const detail=el('div');detail.id='detail-popup';detail.hidden=true;const detailHeader=el('div',null,detail);detailHeader.id='detail-header';el('strong','◷  详情分析',detailHeader);el('span','独立浮窗',detailHeader);const detailClose=el('button','❌',detailHeader);detailClose.id='detail-close';detailClose.setAttribute('aria-label','关闭详情分析');const detailContent=el('div',null,detail);detailContent.id='detail-content';
+let geometry=GM_getValue('jira-monitor-window-v1',{}),activeView='timeout',dismissedDetail='';
+function fit(g){const maxW=Math.max(1,innerWidth-24),maxH=Math.max(1,innerHeight-24);const width=Math.max(Math.min(620,maxW),Math.min(Number(g.width)||960,maxW)),height=Math.max(Math.min(360,maxH),Math.min(Number(g.height)||620,maxH));return {width,height,left:Math.max(12,Math.min(Number.isFinite(g.left)?g.left:(innerWidth-width)/2,innerWidth-width-12)),top:Math.max(12,Math.min(Number.isFinite(g.top)?g.top:(innerHeight-height)/2,innerHeight-height-12))};}
+function layout(){geometry=fit(geometry);Object.assign(shell.style,{width:geometry.width+'px',height:geometry.height+'px',left:geometry.left+'px',top:geometry.top+'px'});}layout();
+function drag(node,resizing){node.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;e.preventDefault();const start={...geometry},x=e.clientX,y=e.clientY;node.setPointerCapture?.(e.pointerId);const move=event=>{geometry=resizing?{...start,width:start.width+event.clientX-x,height:start.height+event.clientY-y}:{...start,left:start.left+event.clientX-x,top:start.top+event.clientY-y};layout();};const end=()=>{node.removeEventListener('pointermove',move);node.removeEventListener('pointerup',end);node.removeEventListener('pointercancel',end);GM_setValue('jira-monitor-window-v1',geometry);};node.addEventListener('pointermove',move);node.addEventListener('pointerup',end);node.addEventListener('pointercancel',end);});}drag(header,false);drag(grip,true);addEventListener('resize',layout);
+const hub={timeout,sprint,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
+ show(which='timeout'){activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
+ hide(){shell.hidden=true;launcher.focus();},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
+ openDetail(){dismissedDetail='';hub.syncDetail();},setAuto(value){hub.autoDetail=value;GM_setValue('jira-monitor-auto-detail',value);if(value){dismissedDetail='';hub.startDetail?.();}else hub.stopDetail?.();hub.syncDetail();},
+ refreshSettings(){hub.configure?.();}};
+launcher.onclick=()=>hub.show();timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
 root.addEventListener('keydown',e=>{if(e.key==='Escape')hub.hide();});
 if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
   function validateTeamsUrl(value){
@@ -45,8 +64,14 @@ if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monit
     return u.href;
   }
 hub.validateWebhook=validateTeamsUrl;
-const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.type='checkbox';auto.checked=GM_getValue('jira-monitor-auto-detail',false)===true;hub.autoDetail=auto.checked;el('span','详情自动分析',autoLabel);auto.onchange=()=>{hub.autoDetail=auto.checked;GM_setValue('jira-monitor-auto-detail',auto.checked);};
-(function () {
+// Inline styles and real tables keep the report readable in Outlook and Teams email actions.
+hub.escapeHtml=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+hub.emailCard=({title,subtitle,sections,meta,url})=>{
+ const esc=hub.escapeHtml;
+ const cards=sections.map(section=>`<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 20px;border:1px solid #e1e7f0;border-radius:10px;background:#ffffff"><tr><td style="padding:18px 20px 10px;font-size:16px;font-weight:700;color:#24334d">${esc(section.title)}</td></tr><tr><td style="padding:0 20px 18px"><table width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-size:13px;line-height:1.6"><thead><tr>${section.headers.map((h,i)=>`<th align="${i?'center':'left'}" style="padding:10px 8px;background:#f1f5fc;color:#718098;font-size:12px;border-bottom:1px solid #e3eaf4">${esc(h)}</th>`).join('')}</tr></thead><tbody>${section.rows.map((row,index)=>`<tr>${row.map((v,i)=>`<td align="${i?'center':'left'}" style="padding:11px 8px;border-bottom:1px solid #edf1f7;${section.total&&index===section.rows.length-1?'font-weight:700;background:#edf3ff;':''}color:${section.deltaColumn===i&&Number(v)>0?'#d13438':'#24334d'}">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></td></tr></table>`).join('');
+ return `<div style="background:#f2f5fb;padding:24px 12px;font-family:Arial,'Microsoft YaHei',sans-serif;color:#24334d"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:720px;margin:0 auto"><tr><td style="background:#245de8;padding:22px 24px;border-radius:12px 12px 0 0;color:white"><div style="font-size:11px;letter-spacing:2px;color:#dbe6ff">JIRA MONITOR</div><h1 style="font-size:23px;line-height:1.4;margin:8px 0">${esc(title)}</h1><div style="font-size:13px;line-height:1.7;color:#e1eaff">${esc(subtitle)}</div></td></tr><tr><td style="padding:22px;background:#ffffff;border:1px solid #e1e7f0;border-top:0;border-radius:0 0 12px 12px">${cards}<a href="${esc(url)}" style="display:inline-block;background:#245de8;color:#ffffff;text-decoration:none;font-size:13px;font-weight:bold;padding:11px 18px;border-radius:7px">打开 Jira 查看详情 →</a><div style="font-size:11px;line-height:1.8;color:#8793a8;margin-top:18px;word-break:break-all">${esc(meta)}</div></td></tr><tr><td style="padding:14px;text-align:center;color:#97a2b5;font-size:10px">Jira Monitor · 项目运营报告</td></tr></table></div>`;
+};
+function initTimeout(detailOnly){
   'use strict';
   // ================= 只需修改这里的规则配置 =================
   const CONFIG = {
@@ -78,11 +103,11 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.0.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.1.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.0.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.1.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -123,17 +148,18 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
     if(!settings.enabled)return {enabled:false};
     if(!settings.recipients.length)throw Error('邮件已启用但收件人为空，请打开邮件设置');
     const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    return {enabled:true,recipients:settings.recipients,to:settings.recipients.join(';'),subject:'[Jira Monitor] '+String(current.key).replace(/[\r\n]/g,'')+' · '+rules.map(r=>r.name+' '+r.sla).join(' / '),bodyText:text,bodyHtml:'<div style="font-family:Arial,sans-serif"><h2>'+esc(current.key)+'</h2><p>'+esc(current.summary)+'</p><p>负责人：'+esc(current.assignee)+'</p>'+rules.map(r=>'<p>'+esc(r.name+'：'+r.sla+' · '+r.days.toFixed(2)+'天')+'</p>').join('')+'<p>扫描时间：'+esc(beijingTime(current.checkedAt))+'</p><p><a href="'+esc(jiraUrl)+'">打开 Jira</a></p></div>'};
+    return {enabled:true,recipients:settings.recipients,to:settings.recipients.join(';'),subject:'[Jira Monitor] '+String(current.key).replace(/[\r\n]/g,'')+' · '+rules.map(r=>r.name+' '+r.sla).join(' / '),bodyText:text,bodyHtml:hub.emailCard({title:current.key+' · 超时预警',subtitle:current.summary+' · 负责人：'+(current.assignee||'未分配'),sections:[{title:'规则分析',headers:['规则','结果','时长（天）'],rows:rules.map(r=>[r.name,r.sla,r.days.toFixed(2)])}],meta:'扫描时间：'+beijingTime(current.checkedAt),url:jiraUrl})};
   }
   const PROJECT_SETTING='jira-monitor-projects-v1';
   const projectKeyOf=key=>String(key||'').trim().match(/^([A-Z][A-Z0-9_]*)-\d+$/i)?.[1]?.toUpperCase()||'';
   function projectConfigs(){if(typeof GM_getValue!=='function')return [];const data=GM_getValue(PROJECT_SETTING,[]);if(!Array.isArray(data))throw Error('项目配置格式无效，请打开配置中心');return data;}
   function projectTarget(key){const projectKey=projectKeyOf(key);const rows=projectConfigs().filter(r=>r.projectKey===projectKey);if(rows.length>1)throw Error(projectKey+' 项目配置重复');return rows[0]?{...rows[0],projectKey}:null;}
   function configureCenter(){
-    const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0005;display:flex;align-items:center;justify-content:center';
-    const shadow=overlay.attachShadow({mode:'open'}),box=document.createElement('div');box.style.cssText='background:white;color:#172b4d;padding:20px;border-radius:8px;width:1000px;max-width:94vw;max-height:85vh;overflow:auto;font:14px Arial';shadow.append(box);
+    hub.show('settings');hub.settings.replaceChildren();const overlay={remove:()=>hub.show('timeout')},box=hub.settings;
     const add=(tag,text,attr,parent=box)=>{const x=document.createElement(tag);if(text)x.textContent=text;if(attr)x.setAttribute(attr,'');parent.append(x);return x;};
-    add('b','Jira Monitor · 配置中心');
+    add('h2','配置中心');
+    const autoLabel=add('label',null,'data-auto-setting'),auto=add('input',null,'data-auto-detail',autoLabel);auto.type='checkbox';auto.checked=hub.autoDetail;add('span','详情自动分析 · 在 Jira 详情页右下角独立弹出',null,autoLabel);auto.onchange=()=>hub.setAuto(auto.checked);
+
     add('p','项目 Key 取工单编号横杠前的值，如 CSP-3909 → CSP。未配置项目只统计、不发送；邮件通过该项目 Webhook 对应工作流发送。');
     const table=add('table',null,'data-project-table');table.style.cssText='width:100%;border-collapse:collapse';
     const head=add('tr',null,null,table);for(const label of ['项目 Key','Teams Webhook','Email 收件人（多个用分号）','批量自动通知','操作'])add('th',label,null,head);
@@ -180,10 +206,8 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
     };
     add('hr');add('button','统计规则设置','data-center-rules').onclick=configureRules;
     add('button','启动诊断').onclick=()=>alert(badge.textContent+'\n页面：'+location.href);
-    add('button','关闭').onclick=()=>overlay.remove();
-    (document.body||document.documentElement).append(overlay);
   }
-  if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：配置中心',configureCenter);
+  if(!detailOnly&&typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：配置中心',configureCenter);
   const RULE_SETTING='jira-monitor-rules-v1';
   const parseStatuses=value=>[...new Set(String(value||'').split(/[\n,;，；]+/).map(x=>x.trim()).filter(Boolean))];
   function configureRules(){
@@ -300,13 +324,14 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
     const all=[...chunks,...central,end],out=new Uint8Array(all.reduce((n,a)=>n+a.length,0));let at=0;for(const a of all){out.set(a,at);at+=a.length;}return out;
   }
   const STORE = 'jira-monitor-batch-v5';
-  const DETAIL_STORE='jira-monitor-detail-v5';
+  const DETAIL_STORE=detailOnly?'jira-monitor-auto-detail-v1':'jira-monitor-manual-detail-v1';
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const readState=key=>{try{return JSON.parse(sessionStorage.getItem(key));}catch{return null;}};
   const isDetail=()=>/^\/browse\//i.test(location.pathname);
   const get=()=>{
     const batch=readState(STORE);
-    if(batch?.active||batch?.paused)return batch;
+    if(!detailOnly&&(batch?.active||batch?.paused))return batch;
+    if(detailOnly)return readState(DETAIL_STORE);
     return isDetail()?readState(DETAIL_STORE):batch;
   };
   const save=s=>sessionStorage.setItem(s.mode==='single'?DETAIL_STORE:STORE,JSON.stringify(s));
@@ -340,10 +365,10 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
   }
   // Shadow DOM 隔离 Jira 的页面样式；挂在根节点，避免被局部页面刷新移除。
   const host=document.createElement('div');
-  host.id='jira-duration-panel-host';
+  host.id=detailOnly?'jira-detail-panel-host':'jira-duration-panel-host';
   host.style.cssText='display:block!important;position:fixed!important;inset:auto 16px 68px auto!important;width: min(430px, 90vw)!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important';
   host.style.cssText='display:block;width:100%;position:relative';
-  hub.timeout.append(host);
+  (detailOnly?hub.detail:hub.timeout).append(host);
   const shadow=host.attachShadow({mode:'open'});
   const css=document.createElement('style');
   css.textContent=`
@@ -367,12 +392,12 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
   shadow.append(css);
   const panel=document.createElement('section');
   shadow.append(panel);
-  function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}
+  function mountPanel(){if(!host.isConnected)(detailOnly?hub.detail:hub.timeout).append(host);panel.style.display='block';host.style.visibility='visible';}
 
   panel.style.cssText='box-sizing:border-box;position:relative;width:100%;height:min(520px,75vh);max-height:75vh;overflow:hidden;z-index:2147483647;background:#fff;color:#172b4d;border:2px solid #0052cc;border-radius:8px;padding:14px;box-shadow:0 4px 24px #0004;font:13px Arial';
   // 使用 DOM 构建，避免站点 Trusted Types 策略拒绝 innerHTML。
   const make=(tag,text,attr,parent)=>{const x=document.createElement(tag);if(text)x.textContent=text;if(attr)x.setAttribute(attr,'');parent.append(x);return x;};
-  make('b','Jira Monitor v6.0.0',null,panel);
+  make('b','超时预警',null,panel);
   const fold=make('button','收起','data-fold',panel);fold.style.float='right';
   const body=make('div',null,'data-body',panel);
   body.style.cssText='display:flex;flex-direction:column;height:calc(100% - 24px);min-height:0';
@@ -397,8 +422,17 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
   const errorBox=make('pre',null,'data-teams-errors',body);errorBox.hidden=true;errorBox.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;flex-shrink:0;max-height:130px;overflow-y:auto;color:#ae2a19;background:#fff1f0;padding:7px;font:12px Arial';
   make('p',null,'data-progress',body);make('p',null,'data-totals',body);const resultsBox=make('div',null,'data-results',body);
   resultsBox.style.cssText='flex:1;min-height:80px;overflow-y:auto;overscroll-behavior:contain';
-  mountPanel();
-  if(typeof GM_registerMenuCommand==='function') GM_registerMenuCommand('Jira Monitor：显示统计面板',()=>{hub.show('timeout');mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;});
+  const theme=document.createElement('style');theme.textContent=`
+    section{height:100%!important;max-height:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:20px!important;font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif!important}
+    section>b{display:block;font-size:19px;margin-bottom:12px;color:#24334d} [data-fold]{display:none} [data-body]{height:calc(100% - 44px)!important;display:flex!important}
+    button{height:32px;padding:5px 12px;border-radius:7px;border-color:#dbe3ef;background:white} [data-start]{background:#245de8;border-color:#245de8} [data-actions]{flex-wrap:wrap;gap:6px;padding:12px 0}
+    [data-config]{background:#f3f6fc;padding:12px 14px;border-radius:9px;color:#64748b;line-height:1.8;margin:0 0 8px} [data-friday-note]{font-size:11px!important;color:#b67718!important}
+    [data-totals]{background:#eaf0ff;border:1px solid #dee7ff;color:#245de8;padding:11px 13px;border-radius:8px} [data-results]>div{padding:12px 4px!important;border-bottom:1px solid #edf1f7!important;line-height:1.8}
+    select{padding:8px;border-radius:7px;border-color:#dde5f0} [data-teams-status],[data-progress]{font-size:11px!important;color:#8996ab!important} [data-notice]:empty,[data-notice]:empty~[data-teams-errors][hidden]{display:none}
+    :host{height:100%} [data-results]{min-height:80px!important} `;
+  if(detailOnly){theme.textContent+='section{height:420px!important;padding:14px!important}section>b{display:none}[data-body]{height:100%!important}[data-friday-note]{display:none}';}
+  shadow.append(theme);mountPanel();
+  if(!detailOnly&&typeof GM_registerMenuCommand==='function') GM_registerMenuCommand('Jira Monitor：显示统计面板',()=>{hub.show('timeout');mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;});
   const el=s=>panel.querySelector(s);
   let ruleLoadError='';
   try{const saved=typeof GM_getValue==='function'?GM_getValue(RULE_SETTING,null):null;if(saved!==null){validateRules(saved);CONFIG.rules=saved;}}catch(error){ruleLoadError='已保存规则无效，本次使用代码默认规则：'+safeError(error);}
@@ -407,6 +441,7 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
   let busy=false, epoch=0;
   function render() {
     const s=get();
+    if(detailOnly)hub.syncDetail();
     el('[data-teams-status]').textContent='按项目通知：已配置 '+projectConfigs().length+' 个项目'+(s?.mode==='single'?' · 详情仅手动发送':' · 自动通知遵循各项目开关');
     el('[data-config]').textContent=(s?.rules||CONFIG.rules).map(r=>ruleText(r)).join('\n');
     el('[data-start]').disabled=!!s?.active||teamsSending;
@@ -416,7 +451,7 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
     el('[data-teams]').disabled=!!s?.active||teamsSending||!s?.results?.some(item=>item.rules?.some(r=>Number.isFinite(r.seconds)));
     scope.disabled=!!(s?.active||s?.paused);jqlBox.disabled=scope.disabled;
     scope.hidden=isDashboard()||!!keyOf(location.href)&&!onOverview();jqlBox.hidden=true;
-    el('[data-progress]').textContent=s ? `${s.paused?'已暂停':s.active?'运行中':'已结束/停止'} · ${s.index}/${s.queue.length} · ${s.message||''}` : (keyOf(location.href)?'详情页正在自动分析':'点击开始统计当前总览页');
+    el('[data-progress]').textContent=s ? `${s.paused?'已暂停':s.active?'运行中':'已结束/停止'} · ${s.index}/${s.queue.length} · ${s.message||''}` : (keyOf(location.href)?'点击重新分析当前详情':'点击开始统计当前总览页');
     const box=el('[data-results]'),oldScroll=box.scrollTop;box.replaceChildren();
     if(!s){el('[data-totals]').textContent=CONFIG.rules.map(rule=>`${rule.name} 即将超期：0`).join('；');return;}
     const rules=s.rules||CONFIG.rules;
@@ -840,6 +875,8 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
   el('[data-excel]').onclick=()=>download(new Blob([makeXlsx(exportRows())],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Jira Monitor.xlsx');
   let detailRoute='';
   function autoDetail(){
+    if(!detailOnly)return;
+    hub.syncDetail();
     if(!hub.autoDetail)return;
     const batch=readState(STORE);
     if(batch?.active||batch?.paused||teamsSending)return;
@@ -848,19 +885,21 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
       return;
     }
     const key=keyOf(location.href);if(!key||detailRoute===key)return;
+    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}
     epoch++;busy=false;detailRoute=key;
     save({id:String(Date.now())+'-'+epoch,mode:'single',active:true,rules:JSON.parse(JSON.stringify(CONFIG.rules)),queue:[{key,summary:readSummary(),href:location.href}],index:0,results:[],phase:'reading',message:'正在自动分析 '+key});
-    render();void pump();
+    hub.openDetail();render();void pump();
   }
   addEventListener('pagehide',()=>{epoch++;busy=false;});
   addEventListener('pageshow',()=>{epoch++;busy=false;autoDetail();render();setTimeout(pump,800);});
   addEventListener('popstate',()=>{autoDetail();render();});
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
-  hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;
+  if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.0.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.1.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
-})();
+}
+initTimeout();initTimeout(true);
 
 (function () {
   'use strict';
@@ -1047,7 +1086,7 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
   :host{all:initial;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b4d}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d;padding:7px 12px}button:hover{background:#edf3ff}.primary:hover,#launch:hover{background:#0747a6}#close{white-space:nowrap}button:disabled{opacity:.5;cursor:wait}.primary,#launch{background:#0052cc;color:white;border-color:#0052cc}#launch{position:fixed;right:24px;bottom:24px;z-index:2147483646;box-shadow:0 5px 20px #091e4240}#overlay{position:fixed;inset:0;background:#091e4260;z-index:2147483647;padding:3vh 3vw;display:none}#panel{background:#f7f9fc;border-radius:14px;max-width:1280px;margin:auto;height:94vh;overflow:auto;box-shadow:0 20px 80px #091e4255;padding:24px}header{display:flex;align-items:center;justify-content:space-between}h1{font-size:24px;margin:0}h2{font-size:17px;margin:0 0 12px}.muted{color:#5e6c84}p{margin:8px 0}.controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap;margin:18px 0}label{display:flex;flex-direction:column;gap:5px}input,select{border:1px solid #b3bfd0;border-radius:5px;padding:7px;background:white;color:#172b4d}fieldset{margin:0;border:1px solid #b3bfd0;border-radius:6px;padding:8px;background:white;min-width:280px;max-width:100%}.choices{height:140px;overflow:auto;max-width:430px}.choices label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:3px;cursor:pointer}.choices input{margin:0}.tools{display:flex;gap:8px;margin-bottom:5px}.tools button{padding:2px 8px}legend{padding:0 5px}.card{overflow-x:auto;background:white;border:1px solid #dfe5ed;border-radius:9px;margin:16px 0;padding:18px}.notice{padding:10px 14px;background:#eaf1ff;border-radius:6px}#message{white-space:pre-wrap}#message.error{background:#fff0ed;color:#ae2a19;padding:12px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid #e8ecf2;padding:9px 10px}th{background:#f4f6fa;color:#5e6c84}td button{border:0;padding:0;color:#0052cc;background:none;text-decoration:underline}.delta{font-variant-numeric:tabular-nums;font-weight:600}a{color:#0052cc}#detail{overflow:auto}small{font-size:12px}@media(max-width:650px){#panel{padding:14px}.controls{display:block}label{margin:10px 0}#sprints{min-width:0;width:100%}th,td{padding:6px}h1{font-size:20px}}
   </style><button id="launch">◷ Sprint Analysis v0.1.9</button><div id="overlay"><section id="panel" role="dialog" aria-modal="true" aria-label="Sprint Analysis"><header><div><h1>Sprint Analysis <small class="muted">v0.1.9</small></h1><p class="muted"><span id="period-description"></span> · Asia/Shanghai（UTC+08:00）</p></div><button id="close" aria-label="关闭">关闭</button></header>
   <div class="notice">口径：以本次查询匹配的成员回溯对比时点的状态；不还原历史 Sprint 成员或历史筛选条件。已关闭 Sprint 也可能保留在任务 Sprint 字段中；同一任务可出现在多个 Sprint，各 Sprint 不可直接相加。</div>
-  <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Sprint（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 12 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><button id="teams-config">共享 Teams / 邮件配置</button><label>推送项目<select id="notify-project"></select></label><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
+  <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Sprint（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 12 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><label>推送项目<select id="notify-project"></select></label><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
   <p class="muted">统计当前页面查询的全部分页，不扩大到整个 Sprint。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。</p><p id="message" role="status">点击“载入当前页面”读取全部结果；本工具只读取 Jira，不修改任务。</p><div id="results"></div><div id="detail"></div></section></div>`;
   const teamsDialog=document.createElement('div');teamsDialog.id='teams-dialog';teamsDialog.setAttribute('role','dialog');teamsDialog.setAttribute('aria-modal','true');teamsDialog.style.cssText='display:none;position:fixed;inset:0;background:#091e4280;z-index:2147483647;padding:4vh 4vw;overflow:auto';
   const teamsBox=document.createElement('section');teamsBox.className='card';teamsBox.style.cssText='max-width:900px;margin:0 auto;padding:24px;max-height:90vh;overflow:auto';teamsDialog.append(teamsBox);root.append(teamsDialog);
@@ -1200,9 +1239,9 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
       const bodyText=projectKey+' · '+report.description+'\n'+reportMeta+'\n'+reportJiraUrl+'\n\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
       const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       report.payload.projectKey=projectKey;report.payload.reportType='sprint-analysis';
-      report.payload.email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:'<pre>'+escape(bodyText)+'</pre>'}:{enabled:false};
+      report.payload.email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
       const data=JSON.stringify(report.payload),bytes=new TextEncoder().encode(data).length;
-      if(bytes>26*1024)throw new Error('报告超过 Teams 单条消息大小限制，请减少所选 Sprint 后重试；未发送。');
+      if(new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024)throw new Error('报告超过 Teams 单条消息大小限制，请减少所选 Sprint 后重试；未发送。');
       openTeams('Teams 推送预览');
       text('p','目标项目：'+config.name+' · 邮件：'+(target.recipients?.join(';')||'未配置'),teamsBox);
       // Keep the URL signature out of DOM preview and error messages.
@@ -1242,12 +1281,12 @@ const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.typ
       });send.className='primary';cancel.focus();
     }catch(e){message(e.message,true);}
   }
-  $('teams-config').onclick=teamsConfig;$('teams-preview').onclick=teamsPreview;
+  $('teams-preview').onclick=teamsPreview;
 
   $('load').onclick=()=>guard(load);$('run').onclick=()=>guard(run);
   let lastFocus;
   $('launch').style.display='none';$('close').style.display='none';
-  const embeddedStyle=document.createElement('style');embeddedStyle.textContent='#overlay{display:block!important;position:relative;inset:auto;padding:0;background:none;z-index:auto}#panel{height:auto;min-height:65vh;max-width:none;margin:0;box-shadow:none;border-radius:0}';root.append(embeddedStyle);
+  const embeddedStyle=document.createElement('style');embeddedStyle.textContent='#overlay{display:block!important;position:relative;inset:auto;padding:0;background:none;z-index:auto}#panel{height:auto;min-height:0;max-width:none;margin:0;padding:2px;background:transparent;box-shadow:none;border-radius:0}header{margin-bottom:12px}h1{font-size:21px}h1 small{display:none}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}fieldset{min-width:0;max-width:none;width:100%;background:#fff;border-color:#dce4f1;padding:12px}.choices{max-width:none;height:150px}.choices label{font-size:12px}label{font-size:12px;color:#718098}button{border-color:#dbe3f0;border-radius:7px;font-size:12px;padding:8px 10px}.primary{background:#245de8;border-color:#245de8}.notice{font-size:11px;line-height:1.7;color:#718098;background:#edf3ff;padding:10px 12px}#load{align-self:end}#message{font-size:12px}.card{border-color:#e1e7f1;padding:14px;border-radius:10px}p.muted{font-size:11px}#status-all{align-self:start}';root.append(embeddedStyle);
   $('launch').onclick=()=>{lastFocus=document.activeElement;$('overlay').style.display='block';$('close').focus();};
   const close=()=>{hub.hide();lastFocus?.focus();};$('close').onclick=close;
   root.addEventListener('keydown',e=>{if(teamsDialog.style.display!=='none'){

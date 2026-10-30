@@ -1,4 +1,4 @@
-# Jira Monitor v6.0.0
+# Jira Monitor v6.1.0
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -6,10 +6,18 @@
 
 1. 用 Tampermonkey 打开并安装 `jiraMonitor.user.js`。它沿用 Jira Monitor 的 name / namespace，更新现有 Monitor 时保留其本地项目配置。
 2. 停用原独立 Sprint Analysis，避免重复入口。刷新 Jira，右下角点击 **Jira Monitor**。
-3. 在统一面板选择 **超时预警** 或 **Sprint Analysis**。默认不会因打开详情页就开始分析；需要时勾选“详情自动分析”，该选择会保存在本地。
-4. 打开 **共享 Teams / 邮件配置**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
+3. 在统一面板选择 **超时预警** 或 **Sprint Analysis**。默认不会因打开详情页就开始分析；需要时在左侧“配置中心”勾选“详情自动分析”，详情页将在右下角独立弹出分析浮窗，该选择会保存在本地。
+4. 打开左侧 **配置中心**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
 
 安装入口：[jiraMonitor.user.js](https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js)。脚本后续更新从本仓库获取。
+
+## 窗口操作
+
+主窗口默认 960 × 620（自动适应屏幕），拖动顶部标题栏移动窗口，拖动右下角斜纹把手放大缩小；位置与大小保存在本地。左侧菜单切换超时预警、Sprint Analysis 和配置中心，右侧呈现内容。超时预警默认展开，右上角红色 ❌ 关闭窗口。
+
+详情自动分析使用独立的右下角浮窗，与主窗口的手动任务、结果和开关分离。关闭浮窗仅隐藏当前工单结果；进入其他工单详情会再次弹出。取消配置中心的勾选可关闭自动分析，并取消仍在读取的任务。批量扫描进行或暂停时不启动详情自动分析。
+
+两类邮件均使用 HTML 卡片，包含标题、表格和 Jira 按钮；Sprint 合计行突出显示，正向增量为红色。工作流邮件正文必须使用 `email.bodyHtml`，使用 `email.bodyText` 会显示纯文本。
 
 ## 功能
 
@@ -38,8 +46,9 @@ HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看�
 
 - `src/timeout.user.js`、`src/sprint.user.js` 保存两仓库原始版本，方便核对计算逻辑。
 - `scripts/build.py` 合并模块作用域、统一面板和通知配置，生成唯一安装文件 `jiraMonitor.user.js`。
+- `src/hub.js` 提供窗口、侧边栏、拖动缩放和独立详情容器；`src/mail.js` 提供 Outlook 兼容的表格式 HTML 邮件卡片。
 - `npm ci && npm run build && npm run check && npm test`。
-- 集成测试覆盖四类页面手动入口、共享配置编辑、混合项目 Sprint 精确分组、邮件载荷、预览不发送和未配置项目阻断。
+- 集成测试覆盖页面入口、窗口拖动缩放、配置、项目通知路由、详情独立存储与取消、邮件卡片和 HTML 转义。另以 Chrome 无头浏览器实测拖动缩放和检查各页面排版。
 - 原仓库的测试保持在各自仓库中；本项目 `tests/` 是超时预警原版测试参考，旧面板假设不适用于统一 UI。
 
 验证未连接实际 Jira / Teams / 邮件服务，也未发送真实通知。

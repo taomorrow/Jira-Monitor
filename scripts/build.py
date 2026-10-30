@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.0.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
+header=t[:t.index('(function ()')].replace('5.5.4','6.1.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.0.0')
+t=t[t.index('(function ()'):].replace('5.5.4','6.1.0')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -52,26 +52,52 @@ s=s.replace("    groups=calculated;render();", "    groups=calculated;const pick
 s=s.replace("  if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Teams 配置',teamsConfig);",'')
 s=s.replace("  $('launch').onclick=", "  $('launch').style.display='none';$('close').style.display='none';\n  const embeddedStyle=document.createElement('style');embeddedStyle.textContent='#overlay{display:block!important;position:relative;inset:auto;padding:0;background:none;z-index:auto}#panel{height:auto;min-height:65vh;max-width:none;margin:0;box-shadow:none;border-radius:0}';root.append(embeddedStyle);\n  $('launch').onclick=")
 s=s.replace("const close=()=>{$('overlay').style.display='none';lastFocus?.focus();};", "const close=()=>{hub.hide();lastFocus?.focus();};")
-hub=r'''
-(function(){
-'use strict';
-if(window.top!==window.self)return;
-if(document.getElementById('jira-monitor-hub'))return;
-const host=document.createElement('div');host.id='jira-monitor-hub';document.documentElement.append(host);
-const root=host.attachShadow({mode:'open'});
-const style=document.createElement('style');style.textContent=`:host{font:14px Arial;color:#172b4d}button{font:inherit;cursor:pointer;padding:8px 12px;margin:4px;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d}button[aria-selected=true]{background:#0052cc;color:white}#launcher{position:fixed;right:24px;bottom:20px;background:#0052cc;color:white;z-index:2147483646}#shell{position:fixed;inset:4vh 3vw;background:#f7f9fc;border:2px solid #0052cc;border-radius:12px;z-index:2147483646;overflow:auto;box-shadow:0 12px 60px #091e4260}header{position:sticky;top:0;background:#fff;padding:10px;z-index:1;border-bottom:1px solid #ddd;display:flex;align-items:center;flex-wrap:wrap}strong{margin-right:18px}section{padding:12px}[hidden]{display:none!important}`;root.append(style);
-function el(tag,text,parent=root){const node=document.createElement(tag);if(text)node.textContent=text;parent.append(node);return node;}
-const launcher=el('button','Jira Monitor');launcher.id='launcher';
-const shell=el('div');shell.id='shell';shell.hidden=true;
-const header=el('header',null,shell);el('strong','Jira Monitor v6.0.0',header);
-const timeoutTab=el('button','超时预警',header),sprintTab=el('button','Sprint Analysis',header),config=el('button','共享 Teams / 邮件配置',header),close=el('button','关闭',header);
-const timeout=el('section',null,shell),sprint=el('section',null,shell);sprint.hidden=true;
-const hub={timeout,sprint,autoDetail:false,show(which='timeout'){shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';timeoutTab.setAttribute('aria-selected',String(which==='timeout'));sprintTab.setAttribute('aria-selected',String(which==='sprint'));},hide(){shell.hidden=true;launcher.focus();}};
-launcher.onclick=()=>hub.show();timeoutTab.onclick=()=>hub.show('timeout');sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();
-root.addEventListener('keydown',e=>{if(e.key==='Escape')hub.hide();});
-if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
-'''
-# Allow original auto-detail behavior as a visible opt-in, persisted with the unified script.
+hub=(root/'src/hub.js').read_text()
 hub += s[s.index('  function validateTeamsUrl(value){'):s.index('  function teamsResponseInfo')]+'hub.validateWebhook=validateTeamsUrl;\n'
-hub += "const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.type='checkbox';auto.checked=GM_getValue('jira-monitor-auto-detail',false)===true;hub.autoDetail=auto.checked;el('span','详情自动分析',autoLabel);auto.onchange=()=>{hub.autoDetail=auto.checked;GM_setValue('jira-monitor-auto-detail',auto.checked);};\n"
+hub += (root/'src/mail.js').read_text()
+
+# Build isolated monitor controllers: explicit main-window work and automatic detail popup.
+t=t.replace('(function () {', 'function initTimeout(detailOnly){',1)
+t=t.removesuffix('\n').removesuffix('})();')+'}\ninitTimeout();initTimeout(true);\n'
+t=t.replace("host.id='jira-duration-panel-host';", "host.id=detailOnly?'jira-detail-panel-host':'jira-duration-panel-host';")
+t=t.replace("hub.timeout.append(host)","(detailOnly?hub.detail:hub.timeout).append(host)")
+t=t.replace("const DETAIL_STORE='jira-monitor-detail-v5';", "const DETAIL_STORE=detailOnly?'jira-monitor-auto-detail-v1':'jira-monitor-manual-detail-v1';")
+t=t.replace("    if(batch?.active||batch?.paused)return batch;", "    if(!detailOnly&&(batch?.active||batch?.paused))return batch;\n    if(detailOnly)return readState(DETAIL_STORE);")
+t=t.replace("    if(!hub.autoDetail)return;", "    if(!detailOnly)return;\n    hub.syncDetail();\n    if(!hub.autoDetail)return;")
+t=t.replace("    render();void pump();", "    hub.openDetail();render();void pump();")
+t=t.replace("    const s=get();\n    el('[data-teams-status]')", "    const s=get();\n    if(detailOnly)hub.syncDetail();\n    el('[data-teams-status]')")
+t=t.replace("if(typeof GM_registerMenuCommand==='function')", "if(!detailOnly&&typeof GM_registerMenuCommand==='function')")
+t=t.replace("  hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;", "  if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}")
+t=t.replace("    const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0005;display:flex;align-items:center;justify-content:center';\n    const shadow=overlay.attachShadow({mode:'open'}),box=document.createElement('div');box.style.cssText='background:white;color:#172b4d;padding:20px;border-radius:8px;width:1000px;max-width:94vw;max-height:85vh;overflow:auto;font:14px Arial';shadow.append(box);", "    hub.show('settings');hub.settings.replaceChildren();const overlay={remove:()=>hub.show('timeout')},box=hub.settings;")
+t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配置中心');
+    const autoLabel=add('label',null,'data-auto-setting'),auto=add('input',null,'data-auto-detail',autoLabel);auto.type='checkbox';auto.checked=hub.autoDetail;add('span','详情自动分析 · 在 Jira 详情页右下角独立弹出',null,autoLabel);auto.onchange=()=>hub.setAuto(auto.checked);
+""")
+t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
+t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
+t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
+t=t.replace("make('b','Jira Monitor v6.1.0',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
+t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
+# The alert close affordance belongs to the outer window; timeout content stays expanded.
+t=t.replace("  mountPanel();\n", """  const theme=document.createElement('style');theme.textContent=`
+    section{height:100%!important;max-height:none!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:20px!important;font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif!important}
+    section>b{display:block;font-size:19px;margin-bottom:12px;color:#24334d} [data-fold]{display:none} [data-body]{height:calc(100% - 44px)!important;display:flex!important}
+    button{height:32px;padding:5px 12px;border-radius:7px;border-color:#dbe3ef;background:white} [data-start]{background:#245de8;border-color:#245de8} [data-actions]{flex-wrap:wrap;gap:6px;padding:12px 0}
+    [data-config]{background:#f3f6fc;padding:12px 14px;border-radius:9px;color:#64748b;line-height:1.8;margin:0 0 8px} [data-friday-note]{font-size:11px!important;color:#b67718!important}
+    [data-totals]{background:#eaf0ff;border:1px solid #dee7ff;color:#245de8;padding:11px 13px;border-radius:8px} [data-results]>div{padding:12px 4px!important;border-bottom:1px solid #edf1f7!important;line-height:1.8}
+    select{padding:8px;border-radius:7px;border-color:#dde5f0} [data-teams-status],[data-progress]{font-size:11px!important;color:#8996ab!important} [data-notice]:empty,[data-notice]:empty~[data-teams-errors][hidden]{display:none}
+    :host{height:100%} [data-results]{min-height:80px!important} `;
+  if(detailOnly){theme.textContent+='section{height:420px!important;padding:14px!important}section>b{display:none}[data-body]{height:100%!important}[data-friday-note]{display:none}';}
+  shadow.append(theme);mountPanel();
+""",1)
+# Match Teams card content with a real, styled email table.
+old="bodyHtml:'<div style=\"font-family:Arial,sans-serif\"><h2>'+esc(current.key)+'</h2><p>'+esc(current.summary)+'</p><p>负责人：'+esc(current.assignee)+'</p>'+rules.map(r=>'<p>'+esc(r.name+'：'+r.sla+' · '+r.days.toFixed(2)+'天')+'</p>').join('')+'<p>扫描时间：'+esc(beijingTime(current.checkedAt))+'</p><p><a href=\"'+esc(jiraUrl)+'\">打开 Jira</a></p></div>'"
+new="bodyHtml:hub.emailCard({title:current.key+' · 超时预警',subtitle:current.summary+' · 负责人：'+(current.assignee||'未分配'),sections:[{title:'规则分析',headers:['规则','结果','时长（天）'],rows:rules.map(r=>[r.name,r.sla,r.days.toFixed(2)])}],meta:'扫描时间：'+beijingTime(current.checkedAt),url:jiraUrl})"
+assert old in t
+t=t.replace(old,new)
+s=s.replace("bodyHtml:'<pre>'+escape(bodyText)+'</pre>'", "bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})")
+s=s.replace("if(bytes>26*1024)", "if(new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024)")
+s=s.replace('<button id="teams-config">共享 Teams / 邮件配置</button>', '')
+s=s.replace("  $('teams-config').onclick=teamsConfig;", "  ")
+s=s.replace("#panel{height:auto;min-height:65vh;max-width:none;margin:0;box-shadow:none;border-radius:0}", "#panel{height:auto;min-height:0;max-width:none;margin:0;padding:2px;background:transparent;box-shadow:none;border-radius:0}header{margin-bottom:12px}h1{font-size:21px}h1 small{display:none}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}fieldset{min-width:0;max-width:none;width:100%;background:#fff;border-color:#dce4f1;padding:12px}.choices{max-width:none;height:150px}.choices label{font-size:12px}label{font-size:12px;color:#718098}button{border-color:#dbe3f0;border-radius:7px;font-size:12px;padding:8px 10px}.primary{background:#245de8;border-color:#245de8}.notice{font-size:11px;line-height:1.7;color:#718098;background:#edf3ff;padding:10px 12px}#load{align-self:end}#message{font-size:12px}.card{border-color:#e1e7f1;padding:14px;border-radius:10px}p.muted{font-size:11px}#status-all{align-self:start}")
 (root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n})();\n')

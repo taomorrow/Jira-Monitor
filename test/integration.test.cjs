@@ -3,24 +3,24 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const {JSDOM}=require('jsdom');
 const source=fs.readFileSync(__dirname+'/../jiraMonitor.user.js','utf8');
-function boot(path='/issues/?jql=project%3DCSP'){
- const dom=new JSDOM('<body><div id="issuetable"></div></body>',{url:'https://jira.xpaas.lenovo.com'+path,runScripts:'outside-only'}),w=dom.window;
+function boot(path='/issues/?jql=project%3DCSP',options={}){
+ const dom=new JSDOM(path.startsWith('/browse/')?'<body></body>':'<body><div id="issuetable"></div></body>',{url:'https://jira.xpaas.lenovo.com'+path,runScripts:'outside-only'}),w=dom.window;
  const store=new Map([['jira-monitor-projects-v1',[{projectKey:'CSP',webhook:'https://example.api.powerplatform.com/workflows/test',recipients:['test@example.com'],autoNotify:false}]]]),requests=[],errors=[];
  w.GM_getValue=(k,d)=>store.has(k)?store.get(k):d;w.GM_setValue=(k,v)=>store.set(k,v);w.GM_deleteValue=k=>store.delete(k);w.GM_registerMenuCommand=()=>{};w.GM_xmlhttpRequest=x=>requests.push(x);w.fetch=()=>{throw Error('Unexpected automatic request');};w.setInterval=()=>0;w.setTimeout=()=>0;w.TextEncoder=TextEncoder;w.console.error=(...x)=>errors.push(x);
+ if(options.auto)store.set('jira-monitor-auto-detail',true);if(options.setup)options.setup(w);
  w.eval(source);return {dom,w,store,requests,errors,hub:w.document.getElementById('jira-monitor-hub').shadowRoot};
 }
 test('single panel on issue, dashboard, board and detail pages; starts no requests',()=>{
  for(const path of ['/issues/','/browse/CSP-1','/secure/Dashboard.jspa','/secure/RapidBoard.jspa']){
  const f=boot(path);assert.equal(f.errors.length,0,JSON.stringify(f.errors));assert.equal(f.requests.length,0);assert.equal(f.hub.querySelector('#shell').hidden,true);
- const buttons=[...f.hub.querySelector('header').querySelectorAll('button')];buttons[1].click();assert.equal(f.hub.querySelectorAll('section')[1].hidden,false);
+ const buttons=[...f.hub.querySelector('nav').querySelectorAll('button')];buttons[1].click();assert.equal(f.hub.querySelectorAll('section')[1].hidden,false);
  const sprint=f.hub.querySelector('#jsa-host').shadowRoot;assert.ok(sprint.getElementById('run'));assert.equal(sprint.getElementById('launch').style.display,'none');
  buttons[0].click();assert.equal(f.hub.querySelectorAll('section')[0].hidden,false);assert.ok(f.hub.querySelector('#jira-duration-panel-host').shadowRoot.querySelector('[data-start]'));f.dom.window.close();
  }
 });
 test('both modules use the same editable project configuration',()=>{
- const f=boot();const sprint=f.hub.querySelector('#jsa-host').shadowRoot;sprint.getElementById('teams-config').click();
- const config=[...f.w.document.querySelectorAll('div')].find(n=>n.shadowRoot?.querySelector('[data-project-table]'));
- assert.ok(config);const root=config.shadowRoot;assert.equal(root.querySelector('[data-project-key]').value,'CSP');root.querySelector('[data-project-emails]').value='updated@example.com';root.querySelector('[data-project-save]').click();assert.equal(f.store.get('jira-monitor-projects-v1')[0].recipients.join(';'),'updated@example.com');assert.equal(f.requests.length,0);f.dom.window.close();
+ const f=boot();f.hub.querySelector('#nav-settings').click();
+ const root=f.hub.querySelector('#settings-view');assert.ok(root.querySelector('[data-project-table]'));assert.equal(root.querySelector('[data-project-key]').value,'CSP');root.querySelector('[data-project-emails]').value='updated@example.com';root.querySelector('[data-project-save]').click();assert.equal(f.store.get('jira-monitor-projects-v1')[0].recipients.join(';'),'updated@example.com');assert.equal(f.requests.length,0);f.dom.window.close();
 });
 test('mixed project Sprint reports route only selected project totals and shared recipients',async()=>{
  const f=boot('/issues/?jql=project%20in%20(CSP,OSPIT)'),w=f.w;
@@ -36,12 +36,37 @@ test('mixed project Sprint reports route only selected project totals and shared
  assert.equal(root.getElementById('notify-project').options.length,2);
  root.getElementById('notify-project').value='CSP';await click('teams-preview');assert.equal(f.requests.length,0);assert.ok(root.getElementById('teams-preview-content'),root.getElementById('message').textContent);assert.match(root.getElementById('teams-preview-content').textContent,/Shared Sprint/);
  root.getElementById('teams-send').click();assert.equal(f.requests.length,1);const request=f.requests[0],payload=JSON.parse(request.data);
- assert.equal(request.url,f.store.get('jira-monitor-projects-v1')[0].webhook);assert.equal(payload.projectKey,'CSP');assert.equal(payload.email.to,'test@example.com');assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);assert.doesNotMatch(payload.email.bodyText,/OSPIT-2/);
+ assert.equal(request.url,f.store.get('jira-monitor-projects-v1')[0].webhook);assert.equal(payload.projectKey,'CSP');assert.equal(payload.email.to,'test@example.com');const mail=new JSDOM(payload.email.bodyHtml).window.document;assert.ok(mail.querySelector('table thead th'));assert.match(mail.body.textContent,/所选状态合计/);assert.equal(mail.querySelector('pre'),null);assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);assert.doesNotMatch(payload.email.bodyText,/OSPIT-2/);
  request.onload({status:202});root.getElementById('teams-preview-cancel').click();root.getElementById('notify-project').value='OSPIT';await click('teams-preview');assert.equal(f.requests.length,1);assert.match(root.getElementById('message').textContent,/配置/);f.dom.window.close();
 });
 test('shared settings reject duplicate keys and unsafe webhook URLs; HEAD sends no report',()=>{
- const f=boot();[...f.hub.querySelector('header').querySelectorAll('button')][2].click();
- const root=[...f.w.document.querySelectorAll('div')].find(n=>n.shadowRoot?.querySelector('[data-project-table]')).shadowRoot;
+ const f=boot();f.hub.querySelector('#nav-settings').click();
+ const root=f.hub.querySelector('#settings-view');
  root.querySelector('[data-project-hook]').value='https://evil.example/workflows/test';root.querySelector('[data-project-save]').click();assert.match(root.querySelector('[data-project-status]').textContent,/不支持/);assert.equal(f.store.get('jira-monitor-projects-v1')[0].webhook,'https://example.api.powerplatform.com/workflows/test');
  root.querySelector('[data-legacy-key]').value='CSP';root.querySelector('[data-project-diagnose]').click();assert.equal(f.requests.length,1);assert.equal(f.requests[0].method,'HEAD');assert.equal(f.requests[0].data,undefined);f.dom.window.close();
+});
+test('sidebar, close, drag and resize persist geometry; settings owns the only auto switch',()=>{
+ const f=boot(),root=f.hub,w=f.w;root.querySelector('#launcher').click();assert.equal(root.querySelector('#timeout-view').hidden,false);
+ assert.equal(root.querySelector('#titlebar').querySelector('input'),null);assert.equal(root.querySelector('#jsa-host').shadowRoot.getElementById('teams-config'),null);
+ const shell=root.querySelector('#shell'),before=parseFloat(shell.style.width),grip=root.querySelector('#resize-grip');
+ const event=(type,x,y)=>new w.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y});
+ grip.dispatchEvent(event('pointerdown',100,100));grip.dispatchEvent(event('pointermove',-50,50));grip.dispatchEvent(event('pointerup',-50,50));assert.ok(parseFloat(shell.style.width)<before);assert.equal(f.store.get('jira-monitor-window-v1').width,parseFloat(shell.style.width));
+ const top=parseFloat(shell.style.top),bar=root.querySelector('#titlebar');bar.dispatchEvent(event('pointerdown',100,100));bar.dispatchEvent(event('pointermove',100,125));bar.dispatchEvent(event('pointerup',100,125));assert.notEqual(parseFloat(shell.style.top),top);
+ root.querySelector('#nav-settings').click();assert.ok(root.querySelector('[data-auto-detail]'));root.querySelector('#window-close').click();assert.equal(shell.hidden,true);f.dom.window.close();
+});
+test('auto detail is an independent popup and disabling cancels pending results',async()=>{
+ let resolve;
+ const f=boot('/browse/CSP-9',{auto:true,setup(w){w.fetch=()=>new Promise(r=>resolve=r);}}),root=f.hub;
+ assert.equal(root.querySelector('#detail-popup').hidden,false);assert.equal(root.querySelector('#shell').hidden,true);
+ assert.equal(root.querySelector('#jira-duration-panel-host').shadowRoot.querySelector('[data-start]').disabled,false);
+ const pending=JSON.parse(f.w.sessionStorage.getItem('jira-monitor-auto-detail-v1'));assert.equal(pending.active,true);assert.equal(f.w.sessionStorage.getItem('jira-monitor-manual-detail-v1'),null);
+ root.querySelector('#detail-close').click();assert.equal(root.querySelector('#detail-popup').hidden,true);
+ root.querySelector('#nav-settings').click();root.querySelector('[data-auto-detail]').click();assert.equal(f.store.get('jira-monitor-auto-detail'),false);assert.equal(root.querySelector('#detail-popup').hidden,true);
+ resolve({ok:true,headers:{get:()=> 'application/json'},json:async()=>({fields:{status:{name:'In Progress'},summary:'late'},changelog:{startAt:0,total:0,histories:[]}})});await new Promise(r=>setTimeout(r,10));
+ assert.equal(JSON.parse(f.w.sessionStorage.getItem('jira-monitor-auto-detail-v1')).results.length,0);f.dom.window.close();
+});
+test('detail popup completes analysis separately and emails a safe card',async()=>{
+ const f=boot('/browse/CSP-9',{auto:true,setup(w){w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({fields:{status:{name:'In Progress'},summary:'<script>unsafe</script>',assignee:{displayName:'Demo'}},changelog:{startAt:0,total:1,histories:[{id:'1',created:new Date(Date.now()-86400000).toISOString(),items:[{field:'status',fromString:'Open',toString:'In Progress'}]}]}})});}});
+ await new Promise(r=>setTimeout(r,10));const state=JSON.parse(f.w.sessionStorage.getItem('jira-monitor-auto-detail-v1'));assert.equal(state.active,false);assert.equal(state.results.length,1);assert.equal(f.w.sessionStorage.getItem('jira-monitor-manual-detail-v1'),null);
+ const popup=f.hub.querySelector('#jira-detail-panel-host').shadowRoot;assert.match(popup.querySelector('[data-progress]').textContent,/完成/);popup.querySelector('[data-teams]').click();await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,1);const email=JSON.parse(f.requests[0].data).email;assert.match(email.bodyHtml,/<table/);assert.match(email.bodyHtml,/&lt;script&gt;/);assert.doesNotMatch(email.bodyHtml,/<script>/);f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));f.dom.window.close();
 });

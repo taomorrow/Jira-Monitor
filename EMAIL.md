@@ -47,3 +47,7 @@ equals(triggerBody()?['email']?['enabled'], true)
 ```
 
 停用时仅提交 `email: {enabled: false}`，不提交收件人。标题、负责人等 Jira 内容经过 HTML 转义。邮件步骤配置后先手动通知一条，检查工作流运行记录和收件箱。Webhook 2xx 只表示请求已接收，不代表邮件成功送达。脚本测试验证了多收件人保存及请求字段，尚未在用户工作流中验证实际邮件投递。
+
+## v6.1.0 卡片格式
+
+超时预警和 Sprint Analysis 的 `email.bodyHtml` 都是带内联样式的 HTML 卡片，含标题、统计表格、Jira 按钮；Sprint 含合计行和正增量标红。邮件动作正文请绑定 `email.bodyHtml` 并作为 HTML 渲染。`email.bodyText` 仅作纯文本备用。无需改变收件人、主题或 Webhook 配置；若原流程已经绑定 bodyHtml，更新脚本即可。
