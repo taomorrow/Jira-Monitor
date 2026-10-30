@@ -15,7 +15,7 @@ test('single panel on issue, dashboard, board and detail pages; starts no reques
  const f=boot(path);assert.equal(f.errors.length,0,JSON.stringify(f.errors));assert.equal(f.requests.length,0);assert.equal(f.hub.querySelector('#shell').hidden,true);
  const buttons=[...f.hub.querySelector('nav').querySelectorAll('button')];buttons[1].click();assert.equal(f.hub.querySelectorAll('section')[1].hidden,false);
  const sprint=f.hub.querySelector('#jsa-host').shadowRoot;assert.ok(sprint.getElementById('run'));assert.equal(sprint.getElementById('launch').style.display,'none');
- buttons[0].click();assert.equal(f.hub.querySelectorAll('section')[0].hidden,false);assert.ok(f.hub.querySelector('#jira-duration-panel-host').shadowRoot.querySelector('[data-start]'));f.dom.window.close();
+ buttons[0].click();if(path.startsWith('/browse/'))assert.equal(f.hub.querySelector('#shell').hidden,true);else assert.equal(f.hub.querySelectorAll('section')[0].hidden,false);assert.ok(f.hub.querySelector('#jira-duration-panel-host').shadowRoot.querySelector('[data-start]'));f.dom.window.close();
  }
 });
 test('both modules use the same editable project configuration',()=>{
@@ -76,8 +76,8 @@ test('launcher drag saves position without opening; rules close is at the top',(
  const event=(type,x,y)=>new w.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y});launcher.dispatchEvent(event('pointerdown',10,10));launcher.dispatchEvent(event('pointermove',180,140));launcher.dispatchEvent(event('pointerup',180,140));launcher.click();assert.equal(root.querySelector('#shell').hidden,true);assert.ok(f.store.get('jira-monitor-launcher-v1').left>0);launcher.click();assert.equal(root.querySelector('#shell').hidden,false);
  root.querySelector('#nav-settings').click();root.querySelector('[data-center-rules]').click();const modal=[...w.document.querySelectorAll('div')].find(n=>n.shadowRoot?.querySelector('[data-rule-close]'));assert.ok(modal);const close=modal.shadowRoot.querySelector('[data-rule-close]');assert.equal(close.textContent,'❌');assert.equal(close.parentElement.firstElementChild,close);assert.equal([...modal.shadowRoot.querySelectorAll('button')].filter(b=>b.textContent==='关闭').length,0);close.click();assert.equal(modal.isConnected,false);f.dom.window.close();
 });
-test('paused batch reopens its controls automatically on the next Jira page',()=>{
- const f=boot('/browse/CSP-9',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify({id:'batch-1',mode:'batch',active:false,paused:true,rules:[],queue:[{key:'CSP-9'}],results:[],index:0,phase:'reading'}));}});
+test('paused batch reopens its controls automatically on the Jira list page',()=>{
+ const f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify({id:'batch-1',mode:'batch',active:false,paused:true,rules:[],queue:[{key:'CSP-9'}],results:[],index:0,phase:'reading'}));}});
  assert.equal(f.hub.querySelector('#shell').hidden,false);assert.equal(f.hub.querySelector('#timeout-view').hidden,false);assert.equal(f.hub.querySelector('#jira-duration-panel-host').shadowRoot.querySelector('[data-stop]').disabled,false);assert.equal(f.hub.querySelector('#detail-popup').hidden,true);f.dom.window.close();
 });
 test('multiple projects freeze destinations and send separate reports once, retaining partial outcomes',async()=>{
@@ -93,4 +93,12 @@ test('multiple projects freeze destinations and send separate reports once, reta
  f.requests[0].onload({status:500});await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,2);assert.equal(f.requests[1].url,'https://other.logic.azure.com/workflows/osp');
  for(const [i,key,email] of [[0,'CSP','test@example.com'],[1,'OSPIT','osp@example.com']]){const payload=JSON.parse(f.requests[i].data);assert.equal(payload.projectKey,key);assert.equal(payload.email.to,email);assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);}
  f.requests[1].onload({status:202});await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,2);assert.match(root.getElementById('teams-send-status').textContent,/CSP：失败/);assert.match(root.getElementById('teams-send-status').textContent,/OSPIT：已提交/);f.dom.window.close();
+});
+
+test('detail routes never display the batch list, including active/paused jobs and SPA navigation',()=>{
+ for(const paused of [false,true]){
+ const f=boot('/browse/CSP-9',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify({id:'job',mode:'batch',active:!paused,paused,rules:[],queue:[{key:'CSP-9'}],results:[],index:0,phase:'reading'}));}});
+ assert.equal(f.hub.querySelector('#shell').hidden,true);f.hub.querySelector('#launcher').click();assert.equal(f.hub.querySelector('#shell').hidden,true);f.dom.window.close();
+ }
+ const f=boot('/issues/');f.hub.querySelector('#launcher').click();assert.equal(f.hub.querySelector('#shell').hidden,false);f.w.history.pushState({},'', '/browse/CSP-9');f.w.dispatchEvent(new f.w.PopStateEvent('popstate'));assert.equal(f.hub.querySelector('#shell').hidden,true);f.dom.window.close();
 });

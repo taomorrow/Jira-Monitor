@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.2.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
+header=t[:t.index('(function ()')].replace('5.5.4','6.2.1').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.2.0')
+t=t[t.index('(function ()'):].replace('5.5.4','6.2.1')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -75,7 +75,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.2.0',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.2.1',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -102,7 +102,7 @@ s=s.replace("  $('teams-config').onclick=teamsConfig;", "  ")
 s=s.replace("#panel{height:auto;min-height:65vh;max-width:none;margin:0;box-shadow:none;border-radius:0}", "#panel{height:auto;min-height:0;max-width:none;margin:0;padding:2px;background:transparent;box-shadow:none;border-radius:0}header{margin-bottom:12px}h1{font-size:21px}h1 small{display:none}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}fieldset{min-width:0;max-width:none;width:100%;background:#fff;border-color:#dce4f1;padding:12px}.choices{max-width:none;height:150px}.choices label{font-size:12px}label{font-size:12px;color:#718098}button{border-color:#dbe3f0;border-radius:7px;font-size:12px;padding:8px 10px}.primary{background:#245de8;border-color:#245de8}.notice{font-size:11px;line-height:1.7;color:#718098;background:#edf3ff;padding:10px 12px}#load{align-self:end}#message{font-size:12px}.card{border-color:#e1e7f1;padding:14px;border-radius:10px}p.muted{font-size:11px}#status-all{align-self:start}")
 # Focused refinements for the sidebar version.
 t=t.replace("  let busy=false, epoch=0;", "  let busy=false, epoch=0, shownBatch='';")
-t=t.replace("    const s=get();\n    if(detailOnly)hub.syncDetail();", "    const s=get();\n    if(!detailOnly&&s?.mode==='batch'&&(s.active||s.paused)&&shownBatch!==s.id){shownBatch=s.id;hub.show('timeout');}\n    if(detailOnly)hub.syncDetail();")
+t=t.replace("    const s=get();\n    if(detailOnly)hub.syncDetail();", "    const s=get();\n    hub.syncRoute();\n    if(!detailOnly&&!isDetail()&&s?.mode==='batch'&&(s.active||s.paused)&&shownBatch!==s.id){shownBatch=s.id;hub.show('timeout');}\n    if(detailOnly)hub.syncDetail();")
 t=t.replace("    add('b','统计规则设置');", """    box.style.position='relative';
     const closeRule=add('button','❌','data-rule-close');closeRule.setAttribute('aria-label','关闭统计规则');closeRule.style.cssText='position:sticky;top:0;float:right;margin:0 0 10px 12px;color:#dc3545;background:#fff1f2;border:0;border-radius:8px;width:30px;height:30px;cursor:pointer;z-index:1';closeRule.onclick=()=>overlay.remove();
     add('b','统计规则设置');""")

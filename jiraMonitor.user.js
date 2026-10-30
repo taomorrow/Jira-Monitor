@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.2.0
+// @version      6.2.1
 // @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -43,7 +43,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.2.0',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.2.1',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  超时预警',nav),sprintTab=el('button','▥  Sprint Analysis',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';config.id='nav-settings';
@@ -55,8 +55,8 @@ function fit(g){const maxW=Math.max(1,innerWidth-24),maxH=Math.max(1,innerHeight
 function layout(){geometry=fit(geometry);Object.assign(shell.style,{width:geometry.width+'px',height:geometry.height+'px',left:geometry.left+'px',top:geometry.top+'px'});}layout();
 function drag(node,resizing){node.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;e.preventDefault();const start={...geometry},x=e.clientX,y=e.clientY;node.setPointerCapture?.(e.pointerId);const move=event=>{geometry=resizing?{...start,width:start.width+event.clientX-x,height:start.height+event.clientY-y}:{...start,left:start.left+event.clientX-x,top:start.top+event.clientY-y};layout();};const end=()=>{node.removeEventListener('pointermove',move);node.removeEventListener('pointerup',end);node.removeEventListener('pointercancel',end);GM_setValue('jira-monitor-window-v1',geometry);};node.addEventListener('pointermove',move);node.addEventListener('pointerup',end);node.addEventListener('pointercancel',end);});}drag(header,false);drag(grip,true);addEventListener('resize',layout);
 const hub={timeout,sprint,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
- show(which='timeout'){activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
- hide(){shell.hidden=true;launcher.focus();},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
+ show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
+ hide(){shell.hidden=true;launcher.focus();},syncRoute(){if(/^\/browse\//i.test(location.pathname)&&activeView==='timeout')shell.hidden=true;},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
  openDetail(){dismissedDetail='';hub.syncDetail();},setAuto(value){hub.autoDetail=value;GM_setValue('jira-monitor-auto-detail',value);if(value){dismissedDetail='';hub.startDetail?.();}else hub.stopDetail?.();hub.syncDetail();},
  refreshSettings(){hub.configure?.();}};
 launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
@@ -108,11 +108,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.2.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.2.1 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.2.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.2.1 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -448,7 +448,8 @@ function initTimeout(detailOnly){
   let busy=false, epoch=0, shownBatch='';
   function render() {
     const s=get();
-    if(!detailOnly&&s?.mode==='batch'&&(s.active||s.paused)&&shownBatch!==s.id){shownBatch=s.id;hub.show('timeout');}
+    hub.syncRoute();
+    if(!detailOnly&&!isDetail()&&s?.mode==='batch'&&(s.active||s.paused)&&shownBatch!==s.id){shownBatch=s.id;hub.show('timeout');}
     if(detailOnly)hub.syncDetail();
     el('[data-teams-status]').textContent='按项目通知：已配置 '+projectConfigs().length+' 个项目'+(s?.mode==='single'?' · 详情仅手动发送':' · 自动通知遵循各项目开关');
     el('[data-config]').textContent=(s?.rules||CONFIG.rules).map(r=>ruleText(r)).join('\n');
@@ -904,7 +905,7 @@ function initTimeout(detailOnly){
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
   if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.2.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.2.1 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
