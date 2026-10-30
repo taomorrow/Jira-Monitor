@@ -1,33 +1,45 @@
-# Jira Monitor
+# Jira Monitor v6.0.0
 
-一个油猴脚本，同时支持 **Jira详情自动分析** 和 **总览手动批量扫描**。DEV/DCT规则、周五阈值、Excel和Teams通知共用一套逻辑与配置。
+合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
-## 安装
+## 安装与使用
 
-1. [安装Tampermonkey和脚本的完整指南](INSTALL.md)。
-2. [点击安装统一版 Jira Monitor](https://raw.githubusercontent.com/taomorrow/Jira/main/jiraMonitor.user.js)。
-3. 打开 Jira：详情页自动分析；总览页点击“开始统计”。
+1. 用 Tampermonkey 打开并安装 `jiraMonitor.user.js`。它沿用 Jira Monitor 的 name / namespace，更新现有 Monitor 时保留其本地项目配置。
+2. 停用原独立 Sprint Analysis，避免重复入口。刷新 Jira，右下角点击 **Jira Monitor**。
+3. 在统一面板选择 **超时预警** 或 **Sprint Analysis**。默认不会因打开详情页就开始分析；需要时勾选“详情自动分析”，该选择会保存在本地。
+4. 打开 **共享 Teams / 邮件配置**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
 
+本地文件为待审阅版本；GitHub 上的安装链接在发布前仍是原版本。
 
-## 使用说明
+## 功能
 
-查看 [Jira Monitor 详细文档](jiraMonitor.md)，包括：
+| 超时预警 | Sprint Analysis |
+| --- | --- |
+| DEV / DCT 状态历史、首次进入时间、排除状态 | 当前 Jira 查询全部分页、完整状态历史 |
+| 自定义阈值和状态、周五 10:30 / 17:00 阈值调整 | 按上海时间日 / 周对比、Sprint 多选、12 种状态筛选 |
+| 当前页 / 全分页 / Dashboard、暂停续扫、停止 | 统计表、状态数量明细、净变化明细 |
+| Excel 导出、按项目通知、冷却和负责人提及 | CSV 导出、Teams 卡片预览、确认推送 |
 
-- 总览自动翻页、暂停/继续，详情自动检测与重新分析。
-- Dashboard（`/secure/Dashboard.jspa`）扫描已加载工单，不限 Issue Type。
-- DEV正常阈值4/5天、DCT 13/14天，北京时间周五上下限提前2天。
-- 彩色Excel导出、Jira超链接和负责人。
-- 总览自动与手动通知均只发送即将超期/已超期；详情仅手动通知，保留全部有效结果。
-- 自动24小时去重，详情和总览共用油猴设置及记录。
+点击超时预警的“开始统计”运行；Sprint 页签先“载入当前页面”，选择 Sprint / 状态后“开始分析”。切换页签保留结果，不会停止已明确启动的扫描。暂停后可继续，停止后再开始会新建扫描。
 
-公开版不内置Webhook，自动通知默认关闭。通知需在油猴菜单 **Jira Monitor：配置中心** 中自行设置。
+Sprint 可以跨项目分析和导出。推送时选择“推送项目”，程序按该项目重新计算统计，只发送该项目的数据；每次预览确认发送一个项目。项目邮件收件人与超时预警共用。更换分析条件后需重新分析。
 
-当前适配 `https://jira.xpaas.xx.com/*`，需要已登录且有工单权限。其他实例/Cloud尚未验证。脚本不要求提供Jira密码或token，使用当前登录会话；只有配置通知后才会向指定工作流发送工单数据。
+## Teams 与邮件
 
-本地验证方法及限制见 [使用说明](jiraMonitor.md#本地验证)。
+使用 Microsoft Teams Workflows Webhook。支持 `logic.azure.com`、`api.powerplatform.com`、`api.powerautomate.com` 下带 `/workflows/` 的 HTTPS 地址。地址只存于本地 Tampermonkey，不写入代码。共享配置中可用已保存项目 Key 进行 HEAD 连接诊断；保存配置和诊断都不推送消息。
 
-邮件通知：配置中心的项目表可为各项目维护多个邮箱；需在 Webhook 工作流添加邮件步骤，详见 [邮件配置指南](EMAIL.md)。
+邮件由项目 Webhook 对应的 Power Automate 工作流发送，脚本不直接连接 SMTP。需要在工作流中读取 `email.enabled`，为 true 时调用邮件动作：收件人 `email.to`、标题 `email.subject`、HTML 正文 `email.bodyHtml`。详见 EMAIL.md。Sprint 消息另带 `reportType: "sprint-analysis"`、`projectKey` 和 Adaptive Card attachments；工作流如果强制要求超时报告特有的字段，应将 Sprint 分支按 reportType 区分处理。
 
-分项目通知：工单 Key 横杠前的值为项目 Key，如 CSP-3909 → CSP。配置中心逐项目维护 Webhook、邮件收件人与批量自动开关；混合项目扫描分别发送，未配置项目不发送。详情、总览和 Dashboard 共用此规则。
+超时预警已有项目配置会保留；旧全局设置可在配置中心指定项目 Key 后复制并保存。独立 Sprint 脚本有独立的油猴存储，无法自动跨脚本读取其旧 Webhook，请复制到统一配置中。Sprint 始终手动预览确认，项目“批量自动通知”开关只控制超时批量扫描。
 
-统计规则可在【配置中心 → 统计规则设置】维护，包括阈值、状态范围、起始及排除状态；保存后用于新扫描，正常升级保留。
+HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看工作流运行记录。超时不会自动重试，避免重复投递。
+
+## 开发和验证
+
+- `src/timeout.user.js`、`src/sprint.user.js` 保存两仓库原始版本，方便核对计算逻辑。
+- `scripts/build.py` 合并模块作用域、统一面板和通知配置，生成唯一安装文件 `jiraMonitor.user.js`。
+- `npm ci && npm run build && npm run check && npm test`。
+- 集成测试覆盖四类页面手动入口、共享配置编辑、混合项目 Sprint 精确分组、邮件载荷、预览不发送和未配置项目阻断。
+- 原仓库的测试保持在各自仓库中；本项目 `tests/` 是超时预警原版测试参考，旧面板假设不适用于统一 UI。
+
+验证未连接实际 Jira / Teams / 邮件服务，也未发送真实通知。

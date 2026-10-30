@@ -1,16 +1,18 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      5.5.4
-// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知
+// @version      6.0.0
+// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
+// @grant        GM_deleteValue
 // @grant        GM_setValue
 // @connect      api.powerplatform.com
 // @connect      logic.azure.com
+// @connect      api.powerautomate.com
 // @homepageURL  https://github.com/taomorrow/Jira
 // @supportURL   https://github.com/taomorrow/Jira/issues
 // @downloadURL  https://raw.githubusercontent.com/taomorrow/Jira/main/jiraMonitor.user.js
@@ -18,6 +20,32 @@
 // @run-at       document-idle
 // @noframes
 // ==/UserScript==
+
+(function(){
+'use strict';
+if(window.top!==window.self)return;
+if(document.getElementById('jira-monitor-hub'))return;
+const host=document.createElement('div');host.id='jira-monitor-hub';document.documentElement.append(host);
+const root=host.attachShadow({mode:'open'});
+const style=document.createElement('style');style.textContent=`:host{font:14px Arial;color:#172b4d}button{font:inherit;cursor:pointer;padding:8px 12px;margin:4px;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d}button[aria-selected=true]{background:#0052cc;color:white}#launcher{position:fixed;right:24px;bottom:20px;background:#0052cc;color:white;z-index:2147483646}#shell{position:fixed;inset:4vh 3vw;background:#f7f9fc;border:2px solid #0052cc;border-radius:12px;z-index:2147483646;overflow:auto;box-shadow:0 12px 60px #091e4260}header{position:sticky;top:0;background:#fff;padding:10px;z-index:1;border-bottom:1px solid #ddd;display:flex;align-items:center;flex-wrap:wrap}strong{margin-right:18px}section{padding:12px}[hidden]{display:none!important}`;root.append(style);
+function el(tag,text,parent=root){const node=document.createElement(tag);if(text)node.textContent=text;parent.append(node);return node;}
+const launcher=el('button','Jira Monitor');launcher.id='launcher';
+const shell=el('div');shell.id='shell';shell.hidden=true;
+const header=el('header',null,shell);el('strong','Jira Monitor v6.0.0',header);
+const timeoutTab=el('button','超时预警',header),sprintTab=el('button','Sprint Analysis',header),config=el('button','共享 Teams / 邮件配置',header),close=el('button','关闭',header);
+const timeout=el('section',null,shell),sprint=el('section',null,shell);sprint.hidden=true;
+const hub={timeout,sprint,autoDetail:false,show(which='timeout'){shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';timeoutTab.setAttribute('aria-selected',String(which==='timeout'));sprintTab.setAttribute('aria-selected',String(which==='sprint'));},hide(){shell.hidden=true;launcher.focus();}};
+launcher.onclick=()=>hub.show();timeoutTab.onclick=()=>hub.show('timeout');sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();
+root.addEventListener('keydown',e=>{if(e.key==='Escape')hub.hide();});
+if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
+  function validateTeamsUrl(value){
+    let u;try{u=new URL(String(value).trim().replace(/\\&/g,'&').replace(/&amp;/g,'&'));}catch{throw new Error('请输入有效的 Teams Workflows HTTPS Webhook 地址。');}
+    const allowed=['logic.azure.com','api.powerplatform.com','api.powerautomate.com'];
+    if(u.protocol!=='https:'||u.username||u.password||u.hash||u.port||!allowed.some(h=>u.hostname.endsWith('.'+h))||!u.pathname.includes('/workflows/'))throw new Error('仅支持微软 Teams Workflows 的 HTTPS 地址（logic.azure.com / api.powerplatform.com / api.powerautomate.com），不支持旧版 Connector。');
+    return u.href;
+  }
+hub.validateWebhook=validateTeamsUrl;
+const autoLabel=el('label',null,header),auto=el('input',null,autoLabel);auto.type='checkbox';auto.checked=GM_getValue('jira-monitor-auto-detail',false)===true;hub.autoDetail=auto.checked;el('span','详情自动分析',autoLabel);auto.onchange=()=>{hub.autoDetail=auto.checked;GM_setValue('jira-monitor-auto-detail',auto.checked);};
 (function () {
   'use strict';
   // ================= 只需修改这里的规则配置 =================
@@ -48,13 +76,13 @@
   const DEFAULT_RULES=JSON.parse(JSON.stringify(CONFIG.rules));
   if (window.top !== window.self) return;
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
-  if (!/^\/(issues|browse)(\/|$)/.test(location.pathname)&&!isDashboard()) return;
+
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v5.5.4 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.0.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v5.5.4 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.0.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -75,7 +103,7 @@
     CONFIG.autoNotifyApproaching=GM_getValue(AUTO_SETTING,CONFIG.autoNotifyApproaching)===true;
   }catch{}
   function supportedWebhook(value){
-    try{const u=new URL(value);return u.protocol==='https:'&&(/(^|\.)api\.powerplatform\.com$/i.test(u.hostname)||/(^|\.)logic\.azure\.com$/i.test(u.hostname));}catch{return false;}
+    try{hub.validateWebhook(value);return true;}catch{return false;}
   }
   const EMAIL_SETTING='jira-monitor-email-v1';
   function parseEmailRecipients(value){
@@ -141,6 +169,15 @@
       GM_setValue(PROJECT_SETTING,result);if(JSON.stringify(GM_getValue(PROJECT_SETTING,null))!==JSON.stringify(result))throw Error('存储回读失败');
       render();status.style.color='#00875a';status.textContent='已保存并验证 '+result.length+' 个项目，本页立即生效';
     }catch(error){status.style.color='#ae2a19';status.textContent='保存失败：'+safeError(error);}};
+    add('button','连接诊断（HEAD，不推送）','data-project-diagnose').onclick=()=>{
+      const key=legacyKey.value.trim().toUpperCase(),target=projectConfigs().find(r=>r.projectKey===key);
+      if(!target?.webhook){status.textContent='请在左侧输入框填写已保存的项目 Key，诊断其 Webhook';return;}
+      status.textContent='正在进行 HEAD 连接诊断，未发送消息…';
+      GM_xmlhttpRequest({method:'HEAD',url:target.webhook,anonymous:true,redirect:'error',timeout:15000,
+        onload:r=>{status.textContent='HEAD HTTP '+r.status+'；仅验证网络可达性，不代表卡片或邮件投递成功。未发送消息。';},
+        onerror:()=>{status.textContent='HEAD 网络失败，请检查 VPN 和油猴域名权限。未发送消息。';},
+        ontimeout:()=>{status.textContent='HEAD 诊断超时。未发送消息。';}});
+    };
     add('hr');add('button','统计规则设置','data-center-rules').onclick=configureRules;
     add('button','启动诊断').onclick=()=>alert(badge.textContent+'\n页面：'+location.href);
     add('button','关闭').onclick=()=>overlay.remove();
@@ -305,7 +342,8 @@
   const host=document.createElement('div');
   host.id='jira-duration-panel-host';
   host.style.cssText='display:block!important;position:fixed!important;inset:auto 16px 68px auto!important;width: min(430px, 90vw)!important;z-index:2147483647!important;visibility:visible!important;opacity:1!important';
-  host.style.bottom=CONFIG.panelBottomPx+'px';
+  host.style.cssText='display:block;width:100%;position:relative';
+  hub.timeout.append(host);
   const shadow=host.attachShadow({mode:'open'});
   const css=document.createElement('style');
   css.textContent=`
@@ -329,12 +367,12 @@
   shadow.append(css);
   const panel=document.createElement('section');
   shadow.append(panel);
-  function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}
+  function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}
 
   panel.style.cssText='box-sizing:border-box;position:relative;width:100%;height:min(520px,75vh);max-height:75vh;overflow:hidden;z-index:2147483647;background:#fff;color:#172b4d;border:2px solid #0052cc;border-radius:8px;padding:14px;box-shadow:0 4px 24px #0004;font:13px Arial';
   // 使用 DOM 构建，避免站点 Trusted Types 策略拒绝 innerHTML。
   const make=(tag,text,attr,parent)=>{const x=document.createElement(tag);if(text)x.textContent=text;if(attr)x.setAttribute(attr,'');parent.append(x);return x;};
-  make('b','Jira Monitor v5.5.4',null,panel);
+  make('b','Jira Monitor v6.0.0',null,panel);
   const fold=make('button','收起','data-fold',panel);fold.style.float='right';
   const body=make('div',null,'data-body',panel);
   body.style.cssText='display:flex;flex-direction:column;height:calc(100% - 24px);min-height:0';
@@ -360,7 +398,7 @@
   make('p',null,'data-progress',body);make('p',null,'data-totals',body);const resultsBox=make('div',null,'data-results',body);
   resultsBox.style.cssText='flex:1;min-height:80px;overflow-y:auto;overscroll-behavior:contain';
   mountPanel();
-  if(typeof GM_registerMenuCommand==='function') GM_registerMenuCommand('Jira Monitor：显示统计面板',()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;});
+  if(typeof GM_registerMenuCommand==='function') GM_registerMenuCommand('Jira Monitor：显示统计面板',()=>{hub.show('timeout');mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;});
   const el=s=>panel.querySelector(s);
   let ruleLoadError='';
   try{const saved=typeof GM_getValue==='function'?GM_getValue(RULE_SETTING,null):null;if(saved!==null){validateRules(saved);CONFIG.rules=saved;}}catch(error){ruleLoadError='已保存规则无效，本次使用代码默认规则：'+safeError(error);}
@@ -802,6 +840,7 @@
   el('[data-excel]').onclick=()=>download(new Blob([makeXlsx(exportRows())],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'Jira Monitor.xlsx');
   let detailRoute='';
   function autoDetail(){
+    if(!hub.autoDetail)return;
     const batch=readState(STORE);
     if(batch?.active||batch?.paused||teamsSending)return;
     if(!isDetail()){
@@ -817,6 +856,409 @@
   addEventListener('pageshow',()=>{epoch++;busy=false;autoDetail();render();setTimeout(pump,800);});
   addEventListener('popstate',()=>{autoDetail();render();});
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v5.5.4 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;
+  badge.remove();badge.style.display='none';
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.0.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
+})();
+
+(function () {
+  'use strict';
+  const NONE = '∅';
+  const STATUS_NAMES=['Completed','DEPLOYED','Grooming','In Progress','New','Open','Ready For Deploy','Ready For Test','Ready For UAT','SIT','Testing','UAT'];
+  const normalized=name=>String(name||'').trim().replace(/\s+/g,' ').toLowerCase();
+  function comparisonPeriod(now,mode='day'){
+    const day=86400000,offset=8*3600000;
+    const date=t=>new Date(t+offset).toISOString().slice(0,10);
+    const midnight=Date.parse(date(now)+'T00:00:00+08:00');
+    if(mode==='week'){
+      const weekday=new Date(midnight+offset).getUTCDay();
+      const monday=midnight-((weekday+6)%7)*day;
+      return {cutoff:monday,before:'上周日终',after:'本周截至当前',rate:'周环比',created:'本周创建',
+        description:`By week｜上周 ${date(monday-7*day)}～${date(monday-day)}（周日结束时） → 本周 ${date(monday)}～${date(monday+6*day)}（截至当前，未满周）`};
+    }
+    return {cutoff:midnight,before:'昨日日终',after:'今日截至当前',rate:'日环比',created:'今日创建',
+      description:`By day｜昨日 ${date(midnight-day)}（日终） → 今日 ${date(now)}（截至当前）`};
+  }
+  function selectStatusGroups(source,selection){
+    const names=selection===null?STATUS_NAMES:STATUS_NAMES.filter(n=>selection.includes(normalized(n)));
+    const allowed=new Map(names.map(n=>[normalized(n),n]));
+    return source.map(g=>{
+      const rows=new Map();
+      for(const row of g.rows.values()){
+        const key=normalized(row.name);if(!allowed.has(key))continue;
+        if(!rows.has(key))rows.set(key,{id:key,name:allowed.get(key),before:[],after:[]});
+        rows.get(key).before.push(...row.before);rows.get(key).after.push(...row.after);
+      }
+      if(selection!==null)for(const [id,name] of allowed)if(!rows.has(id))rows.set(id,{id,name,before:[],after:[]});
+      return {...g,rows,issues:g.issues.filter(x=>allowed.has(normalized(x.before?.name))||allowed.has(normalized(x.after?.name)))};
+    });
+  }
+  function sprints(value) {
+    return (Array.isArray(value) ? value : value ? [value] : []).map(v => {
+      if (typeof v === 'object' && v !== null) {
+        if (!/^\d+$/.test(String(v.id))) throw new Error('Sprint ID 无效');
+        return { id: String(v.id), name: v.name || String(v.id), state: v.state || '' };
+      }
+      const id = /\bid=(\d+)/.exec(v), name = /\bname=(.*?)(?=,\w+=|\]$)/.exec(v), state = /\bstate=([^,\]]+)/.exec(v);
+      if (!id) throw new Error('无法识别 Sprint 字段格式，请反馈版本和字段格式。');
+      return { id: id[1], name: name ? name[1] : id[1], state: state ? state[1] : '' };
+    });
+  }
+  function statusAt(issue, cutoff, inclusive = true) {
+    const created = Date.parse(issue.fields.created);
+    if (!Number.isFinite(created)) throw new Error(`${issue.key}: 创建时间无效`);
+    if (inclusive ? created > cutoff : created >= cutoff) return null;
+    let status = { id: String(issue.fields.status.id), name: issue.fields.status.name };
+    const histories = [...issue.changelog.histories].sort((a,b) => Date.parse(b.created)-Date.parse(a.created) || Number(b.id)-Number(a.id));
+    for (const h of histories) {
+      const time = Date.parse(h.created);
+      if (!Number.isFinite(time)) throw new Error(`${issue.key}: 变更时间无效`);
+      if (inclusive ? time <= cutoff : time < cutoff) continue;
+      for (const item of [...h.items].reverse()) {
+        if (item.field === 'status' || item.fieldId === 'status') {
+          if (item.from == null || !item.fromString) throw new Error(`${issue.key}: 状态历史不完整`);
+          status = { id: String(item.from), name: item.fromString };
+        }
+      }
+    }
+    return status;
+  }
+  function rate(a,b) { return a === 0 ? (b === 0 ? '—' : '新增') : `${((b-a)/a*100).toFixed(1)}%`; }
+  function aggregate(issues, field, selected, cutoff, now) {
+    const groups = new Map();
+    for (const issue of issues) {
+      const memberships = sprints(issue.fields[field]);
+      const ids = memberships.length ? [...new Set(memberships.map(s=>s.id))] : [NONE];
+      const before = statusAt(issue, cutoff, false), after = statusAt(issue, now);
+      for (const id of ids.filter(id=>selected.includes(id))) {
+        if (!groups.has(id)) groups.set(id, {id, name: memberships.find(s=>s.id===id)?.name || '未分配 Sprint', rows:new Map(), issues:[]});
+        const g=groups.get(id);
+        for (const [side,status] of [['before',before],['after',after]]) {
+          if (!status) continue;
+          if (!g.rows.has(status.id)) g.rows.set(status.id,{id:status.id,name:status.name,before:[],after:[]});
+          g.rows.get(status.id)[side].push(issue);
+        }
+        g.issues.push({issue,before,after,changed:before?.id!==after?.id});
+      }
+    }
+    return [...groups.values()];
+  }
+  function matchesSprint(issue,field,ids){
+    const list=sprints(issue.fields[field]);
+    return list.length ? list.some(x=>ids.includes(x.id)) : ids.includes(NONE);
+  }
+  function filterGroups(source,statusIds){
+    if(statusIds===null)return source;
+    const allowed=new Set(statusIds);
+    return source.map(g=>({...g,rows:new Map([...g.rows].filter(([id])=>allowed.has(id))),
+      issues:g.issues.filter(x=>allowed.has(x.before?.id)||allowed.has(x.after?.id))}));
+  }
+  function rowsWithTotal(g){
+    const rows=[...g.rows.values()].sort((a,b)=>a.name.localeCompare(b.name));
+    return [...rows,{name:'所选状态合计',before:rows.flatMap(r=>r.before),after:rows.flatMap(r=>r.after)}];
+  }
+  function csvCell(v) { let s=String(v ?? ''); if (/^[\s]*[=+\-@]/.test(s)) s="'"+s; return '"'+s.replaceAll('"','""')+'"'; }
+  function pageQuery(doc, href) {
+    const url = new URL(href);
+    // The visible advanced search editor takes precedence over an old saved-filter ID.
+    for (const selector of ['#jqltextarea', 'textarea[name="jqlQuery"]', 'input[name="jql"]']) {
+      const el = doc.querySelector(selector);
+      let visible=!!el;
+      for(let node=el;node && visible;node=node.parentElement){
+        const style=doc.defaultView?.getComputedStyle(node);
+        if(node.hidden || node.getAttribute('aria-hidden')==='true' || style?.display==='none' || style?.visibility==='hidden')visible=false;
+      }
+      if (visible && el.value?.trim() && !el.disabled) {
+        return {jql:el.value.trim(), source:'当前页面 JQL'};
+      }
+    }
+    const jql=url.searchParams.get('jql');
+    if(jql?.trim()) return {jql:jql.trim(),source:'当前页面 URL JQL'};
+    const key=/\/browse\/([A-Z][A-Z0-9_]*-\d+)/i.exec(url.pathname)?.[1];
+    if(key) return {jql:'key = "'+key+'"',source:'当前任务页面'};
+    const filter=url.searchParams.get('filter');
+    if(filter && /^\d+$/.test(filter)) return {filter,source:'当前页面查询（从页面筛选器解析）'};
+    throw new Error('无法识别当前页面的查询条件。请在 Jira 问题列表点击 Search，或切换 Advanced 后重新载入。');
+  }
+  function validateTeamsUrl(value){
+    let u;try{u=new URL(String(value).trim().replace(/\\&/g,'&').replace(/&amp;/g,'&'));}catch{throw new Error('请输入有效的 Teams Workflows HTTPS Webhook 地址。');}
+    const allowed=['logic.azure.com','api.powerplatform.com','api.powerautomate.com'];
+    if(u.protocol!=='https:'||u.username||u.password||u.hash||u.port||!allowed.some(h=>u.hostname.endsWith('.'+h))||!u.pathname.includes('/workflows/'))throw new Error('仅支持微软 Teams Workflows 的 HTTPS 地址（logic.azure.com / api.powerplatform.com / api.powerautomate.com），不支持旧版 Connector。');
+    return u.href;
+  }
+  function teamsResponseInfo(response={}){
+    const parts=[];
+    if(Number.isFinite(response.status))parts.push('HTTP '+response.status);
+    if(Number.isFinite(response.readyState))parts.push('readyState '+response.readyState);
+    let code='';try{code=JSON.parse(response.responseText||'{}').error?.code||'';}catch{}
+    if(/^[A-Za-z0-9_.-]{1,100}$/.test(code))parts.push(code);
+    const raw=String(response.error||response.message||'');
+    const network=/\b(?:net::)?ERR_[A-Z0-9_]+\b/.exec(raw)?.[0];if(network)parts.push(network);
+    if(/not permitted|not allowed|refused to connect|whitelist|blocked by.*user/i.test(raw))parts.push('油猴连接授权被拒绝，请检查脚本设置中的用户域名白名单');
+    // Do not include raw error strings, response bodies or URLs: they may contain the webhook signature.
+    return parts.join('；')||'浏览器/扩展未提供 HTTP 响应';
+  }
+  function buildTeamsReport(groups,meta,period,jiraUrl){
+    const block=(value,extra={})=>({type:'TextBlock',text:String(value),wrap:true,...extra});
+    const columns=(values,header=false)=>({type:'ColumnSet',spacing:'Medium',separator:!header,columns:values.map((value,i)=>({
+      type:'Column',width:['stretch','42px','42px','50px','64px'][i],spacing:'Small',items:[{type:'TextBlock',text:String(value),...(i?{horizontalAlignment:'Center'}:{wrap:true,horizontalAlignment:'Left'}),...(header?{weight:'Bolder'}:{})}]
+    }))});
+    const heading=['状态',period.before==='上周日终'?'上周末':'昨日',period.after==='本周截至当前'?'本周':'今日','增减',period.rate];
+    const generated=meta.split('｜')[0].trim();
+    const body=[block('Sprint Analysis',{size:'Large',weight:'Bolder',color:'Accent'}),
+      block(period.description,{size:'Small'}),block(generated,{size:'Small',isSubtle:true,spacing:'Small'})];
+    const sections=[];
+    for(const g of groups){
+      const rows=rowsWithTotal(g),total=rows.at(-1),changes=g.issues.filter(x=>x.changed).length,created=g.issues.filter(x=>!x.before&&x.after).length;
+      const model={name:g.name,id:g.id,changes,created,rows:rows.map(r=>{const a=r.before.length,b=r.after.length,d=b-a;return [r.name,String(a),String(b),(d>0?'+':'')+d,rate(a,b)];})};sections.push(model);
+      const metrics=[['当前数量',total.after.length],['净状态变化',changes],[period.created,created]];
+      const items=[block(g.name,{size:'Medium',weight:'Bolder'}),block('Sprint #'+g.id,{size:'Small',isSubtle:true,spacing:'None'}),
+        {type:'ColumnSet',columns:metrics.map(([label,value])=>({type:'Column',width:1,items:[block(value,{size:'Large',weight:'Bolder',color:'Accent',horizontalAlignment:'Center'}),block(label,{size:'Small',isSubtle:true,spacing:'None',horizontalAlignment:'Center'})]}))},
+        columns(heading,true)];
+      for(let i=0;i<model.rows.length;i++){
+        const values=model.rows[i],isTotal=i===model.rows.length-1,row=columns(values,isTotal);row.separator=true;
+        if(values[3]!=='0')row.columns[3].items[0].color=Number(values[3])>0?'Attention':'Accent';
+        items.push(row);
+      }
+      body.push({type:'Container',separator:true,spacing:'Large',items});
+    }
+    body.push(block('当前成员回溯 · 仅统计所选状态 · 数量增减不代表好坏',{size:'Small',isSubtle:true,separator:true}),
+      {type:'Container',id:'analysis-details',isVisible:false,items:[block(meta,{size:'Small',isSubtle:true})]});
+    const payload={type:'message',attachments:[{contentType:'application/vnd.microsoft.card.adaptive',contentUrl:null,content:{$schema:'http://adaptivecards.io/schemas/adaptive-card.json',type:'AdaptiveCard',version:'1.2',msteams:{width:'Full'},body,actions:[
+      {type:'Action.OpenUrl',title:'打开 Jira 查询',url:jiraUrl},{type:'Action.ToggleVisibility',title:'统计口径与查询条件',targetElements:['analysis-details']}
+    ]}}]};
+    return {payload,sections,heading,generated,meta,description:period.description,jiraUrl,period};
+  }
+  const core = {sprints,statusAt,rate,aggregate,csvCell,pageQuery,matchesSprint,filterGroups,rowsWithTotal,STATUS_NAMES,normalized,comparisonPeriod,selectStatusGroups,validateTeamsUrl,buildTeamsReport,teamsResponseInfo};
+  if (typeof window === 'undefined' && typeof module === 'object' && module.exports) { module.exports = core; return; }
+  // An older duplicate userscript may run first. Replace its panel rather than silently exiting.
+  const existing=document.getElementById('jsa-host');
+  if(existing){
+    const previous=existing.dataset.jsaVersion||existing.shadowRoot?.querySelector('h1 small')?.textContent?.replace(/^v/,'')||'0.0.0';
+    const parts=v=>v.split('.').map(Number),a=parts(previous),b=parts('0.1.9');
+    const comparison=a.reduce((r,n,i)=>r||n-(b[i]||0),0);
+    if(comparison>=0)return;
+    existing.remove();
+  }
+  const host=document.createElement('div'); host.id='jsa-host';host.dataset.jsaVersion='0.1.9'; hub.sprint.append(host);
+  const root=host.attachShadow({mode:'open'});
+  root.innerHTML=`<style>
+  :host{all:initial;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b4d}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d;padding:7px 12px}button:hover{background:#edf3ff}.primary:hover,#launch:hover{background:#0747a6}#close{white-space:nowrap}button:disabled{opacity:.5;cursor:wait}.primary,#launch{background:#0052cc;color:white;border-color:#0052cc}#launch{position:fixed;right:24px;bottom:24px;z-index:2147483646;box-shadow:0 5px 20px #091e4240}#overlay{position:fixed;inset:0;background:#091e4260;z-index:2147483647;padding:3vh 3vw;display:none}#panel{background:#f7f9fc;border-radius:14px;max-width:1280px;margin:auto;height:94vh;overflow:auto;box-shadow:0 20px 80px #091e4255;padding:24px}header{display:flex;align-items:center;justify-content:space-between}h1{font-size:24px;margin:0}h2{font-size:17px;margin:0 0 12px}.muted{color:#5e6c84}p{margin:8px 0}.controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap;margin:18px 0}label{display:flex;flex-direction:column;gap:5px}input,select{border:1px solid #b3bfd0;border-radius:5px;padding:7px;background:white;color:#172b4d}fieldset{margin:0;border:1px solid #b3bfd0;border-radius:6px;padding:8px;background:white;min-width:280px;max-width:100%}.choices{height:140px;overflow:auto;max-width:430px}.choices label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:3px;cursor:pointer}.choices input{margin:0}.tools{display:flex;gap:8px;margin-bottom:5px}.tools button{padding:2px 8px}legend{padding:0 5px}.card{overflow-x:auto;background:white;border:1px solid #dfe5ed;border-radius:9px;margin:16px 0;padding:18px}.notice{padding:10px 14px;background:#eaf1ff;border-radius:6px}#message{white-space:pre-wrap}#message.error{background:#fff0ed;color:#ae2a19;padding:12px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid #e8ecf2;padding:9px 10px}th{background:#f4f6fa;color:#5e6c84}td button{border:0;padding:0;color:#0052cc;background:none;text-decoration:underline}.delta{font-variant-numeric:tabular-nums;font-weight:600}a{color:#0052cc}#detail{overflow:auto}small{font-size:12px}@media(max-width:650px){#panel{padding:14px}.controls{display:block}label{margin:10px 0}#sprints{min-width:0;width:100%}th,td{padding:6px}h1{font-size:20px}}
+  </style><button id="launch">◷ Sprint Analysis v0.1.9</button><div id="overlay"><section id="panel" role="dialog" aria-modal="true" aria-label="Sprint Analysis"><header><div><h1>Sprint Analysis <small class="muted">v0.1.9</small></h1><p class="muted"><span id="period-description"></span> · Asia/Shanghai（UTC+08:00）</p></div><button id="close" aria-label="关闭">关闭</button></header>
+  <div class="notice">口径：以本次查询匹配的成员回溯对比时点的状态；不还原历史 Sprint 成员或历史筛选条件。已关闭 Sprint 也可能保留在任务 Sprint 字段中；同一任务可出现在多个 Sprint，各 Sprint 不可直接相加。</div>
+  <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Sprint（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 12 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><button id="teams-config">共享 Teams / 邮件配置</button><label>推送项目<select id="notify-project"></select></label><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
+  <p class="muted">统计当前页面查询的全部分页，不扩大到整个 Sprint。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。</p><p id="message" role="status">点击“载入当前页面”读取全部结果；本工具只读取 Jira，不修改任务。</p><div id="results"></div><div id="detail"></div></section></div>`;
+  const teamsDialog=document.createElement('div');teamsDialog.id='teams-dialog';teamsDialog.setAttribute('role','dialog');teamsDialog.setAttribute('aria-modal','true');teamsDialog.style.cssText='display:none;position:fixed;inset:0;background:#091e4280;z-index:2147483647;padding:4vh 4vw;overflow:auto';
+  const teamsBox=document.createElement('section');teamsBox.className='card';teamsBox.style.cssText='max-width:900px;margin:0 auto;padding:24px;max-height:90vh;overflow:auto';teamsDialog.append(teamsBox);root.append(teamsDialog);
+  const $=id=>root.getElementById(id); let reportIssues=[], reportIds=[], reportStatuses=null, reportNow=0; let field, groups=[], busy=false, reportMeta='', loadedQuery='', reportJiraUrl='', activePeriod=comparisonPeriod(Date.now());
+  $('period-description').textContent=activePeriod.description;
+  const message=(s,error=false)=>{ $('message').textContent=s; $('message').className=error?'error':''; };
+  function text(tag,content,parent){const e=document.createElement(tag); e.textContent=content; parent.append(e); return e;}
+  async function api(path) {
+    const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),30000);
+    try {
+      const res=await fetch(path,{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});
+      if (!res.ok) throw new Error(`Jira HTTP ${res.status}：${res.status===401||res.status===403?'请先登录并确认筛选器/任务访问权限。':'请求失败，请稍后重试或检查接口权限。'}`);
+      if (!res.headers.get('content-type')?.includes('application/json')) throw new Error('Jira 返回了登录页或非 JSON 内容，请先登录 Jira 后重试。');
+      return await res.json();
+    } finally {clearTimeout(timeout);}
+  }
+  async function currentQuery(){
+    const query=pageQuery(document,location.href);
+    if(query.jql)return query.jql;
+    const data=await api('/rest/api/2/filter/'+query.filter);
+    if(!data.jql?.trim())throw new Error('当前页面未返回有效的 JQL，请切换 Advanced 后重新载入。');
+    return data.jql.trim();
+  }
+  async function detectField(){
+    if(field)return field;
+    const fields=await api('/rest/api/2/field');
+    const candidates=fields.filter(f=>f.schema?.custom==='com.pyxis.greenhopper.jira:gh-sprint');
+    if(candidates.length!==1)throw new Error('无法唯一识别 Sprint 自定义字段，请向维护者反馈 /rest/api/2/field 中的 Sprint 字段定义。');
+    return field=candidates[0].id;
+  }
+  async function search(jql){
+    let start=0,total,all=[]; const seen=new Set();
+    do {
+      const params=new URLSearchParams({jql,fields:`summary,status,created,updated,${field}`,startAt:String(start),maxResults:'100'});
+      const page=await api('/rest/api/2/search?'+params);
+      if(!Array.isArray(page.issues)||!Number.isFinite(page.total))throw new Error('搜索接口响应格式不支持');
+      if(total!==undefined&&total!==page.total)throw new Error('查询过程中任务数量发生变化，请重试以免分页遗漏。');
+      total=page.total;
+      if(!page.issues.length && start<total)throw new Error('分页提前结束，已停止统计以避免遗漏。');
+      for(const issue of page.issues){if(seen.has(issue.key))throw new Error('分页出现重复任务，请重试。');seen.add(issue.key);all.push(issue);}
+      start+=page.issues.length;message(`读取任务 ${start} / ${total}…`);
+    }while(start<total);
+    return all;
+  }
+  async function history(issue){
+    const params=new URLSearchParams({fields:`summary,status,created,updated,${field}`,expand:'changelog'});
+    const full=await api('/rest/api/2/issue/'+encodeURIComponent(issue.key)+'?'+params);
+    // The issue detail is authoritative. Search-index timestamps can differ or lag.
+    // Never infer an actual user edit from a raw updated-string mismatch.
+    let c=full.changelog;
+    if(!c||!Array.isArray(c.histories)||!Number.isFinite(c.total))throw new Error(`${issue.key} 未返回可验证完整性的变更历史。`);
+    if((c.startAt||0)!==0||c.histories.length!==c.total){
+      let histories=[],start=0,total;
+      do {
+        let p;try{p=await api('/rest/api/2/issue/'+encodeURIComponent(issue.key)+'/changelog?startAt='+start+'&maxResults=100');}catch{throw new Error(`${issue.key} 历史被截断，且服务器不支持完整历史分页；本次结果不生成。`);}
+        const values=p.values||p.histories;
+        if(!Array.isArray(values)||!Number.isFinite(p.total)||(total!==undefined&&p.total!==total)||(!values.length&&start<p.total))throw new Error(`${issue.key} 历史分页不完整，请重试。`);
+        total=p.total;histories.push(...values);start+=values.length;
+      }while(start<total);
+      if(new Set(histories.map(h=>h.id)).size!==total)throw new Error(`${issue.key} 历史分页重复或缺失。`);
+      c=full.changelog={histories,total};
+    }
+    return full;
+  }
+  async function guard(job){
+    if(busy)return;busy=true;const controls=['load','run','sprint-box','status-box','period'];controls.forEach(id=>$(id).disabled=true);$('export').disabled=true;$('teams-preview').disabled=true;
+    groups=[];$('results').replaceChildren();$('detail').replaceChildren();
+    try{await job();}catch(e){message(e.name==='AbortError'?'请求超过 30 秒，请检查网络或 VPN 后重试。':e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('export').disabled=!groups.length;$('teams-preview').disabled=!groups.length;}
+  }
+  function selected(){return [...$('sprints').querySelectorAll('input:checked')].map(o=>o.value);}
+  function selectedStatuses(){return $('status-all').checked?null:[...$('statuses').querySelectorAll('input:checked')].map(o=>o.value);}
+  function choice(parent,id,name,checked){
+    const label=document.createElement('label'), input=document.createElement('input');input.type='checkbox';input.value=id;input.checked=checked;label.append(input,document.createTextNode(name));parent.append(label);
+  }
+  function invalidate(){if(busy)return;groups=[];$('results').replaceChildren();$('detail').replaceChildren();$('export').disabled=true;$('teams-preview').disabled=true;message(`已选择 ${selected().length} 个 Sprint；状态：${$('status-all').checked?'全部':selectedStatuses().length+' 项'}。请点击“开始分析”。`);}
+  $('period').onchange=()=>{$('period-description').textContent=comparisonPeriod(Date.now(),$('period').value).description;invalidate();};
+  $('sprints').onchange=invalidate;
+  $('statuses').onchange=()=>{$('status-all').checked=false;invalidate();};
+  $('status-all').onchange=()=>{for(const x of $('statuses').querySelectorAll('input'))x.checked=false;invalidate();};
+  for(const [id,checked] of [['sprint-all',true],['sprint-none',false]])$(id).onclick=()=>{for(const x of $('sprints').querySelectorAll('input'))x.checked=checked;invalidate();};
+  async function load(){
+    loadedQuery='';$('sprints').replaceChildren();
+    await detectField();const query=await currentQuery(), issues=await search(query), map=new Map();
+    for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:'未分配 Sprint',state:''});for(const s of list)map.set(s.id,s);}
+    $('sprints').replaceChildren();
+    const options=[...map.values()].sort((a,b)=>(/active/i.test(b.state)?1:0)-(/active/i.test(a.state)?1:0)||b.name.localeCompare(a.name));
+    for(const s of options)choice($('sprints'),s.id,`${s.name}${s.state?' · '+s.state:''} [${s.id}]`,/^active$/i.test(s.state));
+    if(!selected().length&&$('sprints').querySelector('input'))$('sprints').querySelector('input').checked=true;
+    $('statuses').replaceChildren();$('status-all').checked=true;
+    for(const name of STATUS_NAMES)choice($('statuses'),normalized(name),name,false);
+    loadedQuery=query;
+    message(`已读取当前页面全部 ${issues.length} 条任务、${options.length} 个 Sprint 分组。可多选后分析。\nJQL：${loadedQuery}${issues.length?'':'（当前页面没有可见任务）'}`);
+  }
+  function details(title,items){
+    const box=$('detail');box.replaceChildren();box.className='card';text('h2',title,box);
+    const table=document.createElement('table');box.append(table);const tr=document.createElement('tr');table.append(tr);['Issue','摘要',activePeriod.before+' → '+activePeriod.after].forEach(h=>text('th',h,tr));
+    for(const x of items){const row=document.createElement('tr');table.append(row);const td=document.createElement('td');row.append(td);const a=text('a',x.issue.key,td);a.href='/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';text('td',x.issue.fields.summary,row);text('td',`${x.before?.name||'尚未创建'} → ${x.after?.name||'尚未创建'}`,row);}
+    if(!items.length)text('p','没有对应任务。',box);
+    box.scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+  function render(){
+    const result=$('results');result.replaceChildren();text('p',reportMeta,result);
+    for(const g of groups){
+      const card=document.createElement('section');card.className='card';result.append(card);text('h2',g.name+' · '+g.id,card);
+      const changes=g.issues.filter(x=>x.changed), created=g.issues.filter(x=>!x.before&&x.after);
+      const detail=text('button',`查看变化 ${changes.length} 条（${activePeriod.created} ${created.length} 条）`,card);detail.onclick=()=>details(g.name+' · 净状态变化 / 新建任务',changes);
+      const table=document.createElement('table');card.append(table);const head=document.createElement('tr');table.append(head);['状态',activePeriod.before,activePeriod.after,'增减',activePeriod.rate].forEach(h=>text('th',h,head));
+      const rows=rowsWithTotal(g);
+      for(const r of rows){const tr=document.createElement('tr');table.append(tr);text('td',r.name,tr);for(const side of ['before','after']){const td=document.createElement('td');tr.append(td);const b=text('button',String(r[side].length),td);b.onclick=()=>{const keys=new Set(r[side].map(i=>i.key));details(`${g.name} · ${r.name} · ${side==='before'?activePeriod.before:activePeriod.after}`,g.issues.filter(x=>keys.has(x.issue.key)));};}const delta=r.after.length-r.before.length;text('td',(delta>0?'+':'')+delta,tr).className='delta';text('td',rate(r.before.length,r.after.length),tr);}
+    }
+  }
+  async function run(){
+    const ids=selected();if(!ids.length)throw new Error('请先载入并选择 Sprint。');await detectField();
+    const statusIds=selectedStatuses();if(statusIds!==null&&!statusIds.length)throw new Error('请至少选择一个状态，或勾选全部状态。');
+    const jql=await currentQuery();
+    if(jql!==loadedQuery)throw new Error('当前页面查询已改变，请重新“载入当前页面”后再分析。');
+    const now=Date.now();activePeriod=comparisonPeriod(now,$('period').value);const cutoff=activePeriod.cutoff;
+    $('period-description').textContent=activePeriod.description;
+    const pageIssues=await search(jql), issues=pageIssues.filter(i=>matchesSprint(i,field,ids)), full=new Array(issues.length);let cursor=0,done=0,failed;
+    await Promise.all(Array.from({length:Math.min(3,issues.length)},async()=>{while(cursor<issues.length&&!failed){const i=cursor++;try{full[i]=await history(issues[i]);message(`读取完整历史 ${++done} / ${issues.length}…`);}catch(e){failed=e;}}}));
+    if(failed)throw failed;
+    const scoped=full.filter(i=>matchesSprint(i,field,ids));
+    const allGroups=aggregate(scoped,field,ids,cutoff,now);
+    const calculated=selectStatusGroups(allGroups,statusIds);
+    const stateNames=statusIds===null?'全部指定的 12 个状态':[...$('statuses').querySelectorAll('input:checked')].map(x=>x.parentElement.textContent).join('、');
+    reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜当前页面全部分页｜JQL：${jql}｜所选 Sprint：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯`;
+    reportJiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql});
+    reportIssues=scoped;reportIds=ids;reportStatuses=statusIds;reportNow=now;
+    groups=calculated;const picker=$('notify-project');picker.replaceChildren();for(const key of [...new Set(scoped.map(i=>i.key.split('-')[0].toUpperCase()))].sort()){const o=text('option',key,picker);o.value=key;}render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Sprint 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Sprint 分组。合计仅包含所选状态。`);
+  }
+  let teamsSending=false,teamsFocus;
+  function openTeams(title){
+    teamsFocus=root.activeElement||document.activeElement;teamsBox.replaceChildren();text('h2',title,teamsBox);teamsDialog.style.display='block';teamsDialog.setAttribute('aria-label',title);
+  }
+  function closeTeams(){if(teamsSending)return;teamsDialog.style.display='none';teamsBox.replaceChildren();teamsFocus?.focus();}
+  function teamsButton(id,label,action){const b=text('button',label,teamsBox);b.id=id;b.style.margin='8px 8px 0 0';b.onclick=action;return b;}
+  function teamsConfig(){hub.configure();}
+  function teamsPreview(){
+    if(busy||teamsSending||!groups.length)return;
+    const projectKey=$('notify-project').value;
+    const target=hub.target(projectKey+'-1');
+    if(!target?.webhook){message('请先在共享配置中设置所选项目的 Webhook。',true);teamsConfig();return;}
+    const config={url:target.webhook,name:projectKey};
+    const projectIssues=reportIssues.filter(i=>i.key.split('-')[0].toUpperCase()===projectKey);
+    if(!projectIssues.length){message('所选项目在本次分析中没有任务，请重新选择。',true);return;}
+
+    try{
+      const destination=validateTeamsUrl(config.url);
+      const report=buildTeamsReport(selectStatusGroups(aggregate(projectIssues,field,reportIds,activePeriod.cutoff,reportNow),reportStatuses),reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl);
+      const bodyText=projectKey+' · '+report.description+'\n'+reportMeta+'\n'+reportJiraUrl+'\n\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
+      const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      report.payload.projectKey=projectKey;report.payload.reportType='sprint-analysis';
+      report.payload.email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:'<pre>'+escape(bodyText)+'</pre>'}:{enabled:false};
+      const data=JSON.stringify(report.payload),bytes=new TextEncoder().encode(data).length;
+      if(bytes>26*1024)throw new Error('报告超过 Teams 单条消息大小限制，请减少所选 Sprint 后重试；未发送。');
+      openTeams('Teams 推送预览');
+      text('p','目标项目：'+config.name+' · 邮件：'+(target.recipients?.join(';')||'未配置'),teamsBox);
+      // Keep the URL signature out of DOM preview and error messages.
+      text('p','Webhook 主机：'+new URL(destination).hostname+'（密钥已隐藏；目标名称由本地配置提供）',teamsBox);
+      text('p',`将发送当前报告的统计摘要、JQL 和 Jira 查询链接，共 ${bytes} 字节。不包含逐条任务标题、负责人或完整历史。以下为卡片内容预览（查询条件可展开查看）；实际排版随 Teams 客户端变化。`,teamsBox);
+      const preview=document.createElement('div');preview.id='teams-preview-content';preview.style.cssText='background:#f5f7fb;padding:16px;max-height:55vh;overflow:auto;border:1px solid #dfe5ed;border-radius:10px';teamsBox.append(preview);
+      text('h2','Sprint Analysis',preview).style.color='#0052cc';text('p',report.description,preview);text('p',report.generated,preview).className='muted';
+      for(const section of report.sections){
+        const card=document.createElement('section');card.className='card';preview.append(card);text('h2',section.name,card);text('small','Sprint #'+section.id,card).className='muted';
+        const summary=document.createElement('div');summary.style.cssText='display:flex;gap:24px;flex-wrap:wrap;margin:12px 0';card.append(summary);
+        for(const [label,value] of [['当前数量',section.rows.at(-1)[2]],['净状态变化',section.changes],[report.period.created,section.created]]){
+          const metric=document.createElement('div');summary.append(metric);text('strong',String(value),metric).style.cssText='display:block;font-size:24px;color:#0052cc';text('small',label,metric).className='muted';metric.style.textAlign='center';
+        }
+        const table=document.createElement('table');card.append(table);const head=document.createElement('tr');table.append(head);report.heading.forEach((h,j)=>{const th=text('th',h,head);th.style.textAlign=j?'center':'left';});
+        for(let i=0;i<section.rows.length;i++){const tr=document.createElement('tr');table.append(tr);if(i===section.rows.length-1)tr.style.cssText='font-weight:700;background:#eaf1ff';section.rows[i].forEach((v,j)=>{const td=text('td',v,tr);td.style.textAlign=j?'center':'left';td.style.borderBottom='1px solid #d0d8e5';if(j)td.style.whiteSpace='nowrap';if(j===3&&Number(v)>0)td.style.color='#d13438';});}
+      }
+      text('p','当前成员回溯 · 仅统计所选状态 · 数量增减不代表好坏',preview).className='muted';
+      const details=document.createElement('details');preview.append(details);text('summary','统计口径与查询条件',details);text('p',report.meta,details).style.overflowWrap='anywhere';
+      const link=text('a','打开 Jira 查询',preview);link.href=report.jiraUrl;link.target='_blank';link.rel='noopener noreferrer';
+      const status=text('p','尚未发送。确认预览后点击下方按钮。',teamsBox);status.id='teams-send-status';status.setAttribute('role','status');
+      const cancel=teamsButton('teams-preview-cancel','取消',closeTeams);
+      const send=teamsButton('teams-send','确认推送',()=>{
+        if(teamsSending||send.disabled)return;
+        if(typeof GM_xmlhttpRequest!=='function'){status.textContent='缺少油猴跨域请求权限，请更新安装脚本并确认权限。';return;}
+        teamsSending=true;send.disabled=true;cancel.disabled=true;status.textContent='正在提交到 Teams Workflows…';
+        let settled=false,request;
+        const finish=message=>{if(settled)return;settled=true;clearTimeout(watchdog);teamsSending=false;cancel.disabled=false;status.textContent=message;};
+        const watchdog=setTimeout(()=>{finish('请求超时，投递结果未知。请先查看 Teams / 工作流运行记录，避免重复发送。');request?.abort?.();},30000);
+        // One explicit POST only; do not auto-retry a possibly delivered message.
+        try{request=GM_xmlhttpRequest({method:'POST',url:destination,headers:{'Content-Type':'application/json'},data,timeout:30000,anonymous:true,redirect:'error',
+          onload:r=>{if(r.status>=200&&r.status<300)finish('Webhook 已接受请求（HTTP '+r.status+'）。请在 Teams 或工作流运行记录中确认投递；HTTP 成功不代表卡片已发布。');
+            else finish('Teams Webhook 返回：'+teamsResponseInfo(r)+'；请检查工作流地址、认证方式及运行记录。未自动重试。');},
+          onerror:r=>finish('提交失败：'+teamsResponseInfo(r)+'。请先用 Teams 配置中的 HEAD 连接诊断区分跨域权限/网络问题与 HTTP 错误。更新后需接受微软域名连接权限；投递结果可能未知，未自动重试。'),
+          ontimeout:()=>finish('请求超时，投递结果未知。请先查看 Teams / 工作流运行记录，避免重复发送。'),
+          onabort:()=>finish('请求已中止，投递结果未知。请先检查 Teams。')});}
+        catch(e){finish('无法提交请求：'+teamsResponseInfo(e)+'。请检查油猴权限。未自动重试。');}
+      });send.className='primary';cancel.focus();
+    }catch(e){message(e.message,true);}
+  }
+  $('teams-config').onclick=teamsConfig;$('teams-preview').onclick=teamsPreview;
+
+  $('load').onclick=()=>guard(load);$('run').onclick=()=>guard(run);
+  let lastFocus;
+  $('launch').style.display='none';$('close').style.display='none';
+  const embeddedStyle=document.createElement('style');embeddedStyle.textContent='#overlay{display:block!important;position:relative;inset:auto;padding:0;background:none;z-index:auto}#panel{height:auto;min-height:65vh;max-width:none;margin:0;box-shadow:none;border-radius:0}';root.append(embeddedStyle);
+  $('launch').onclick=()=>{lastFocus=document.activeElement;$('overlay').style.display='block';$('close').focus();};
+  const close=()=>{hub.hide();lastFocus?.focus();};$('close').onclick=close;
+  root.addEventListener('keydown',e=>{if(teamsDialog.style.display!=='none'){
+    if(e.key==='Escape'){e.preventDefault();closeTeams();}
+    if(e.key==='Tab'){const nodes=[...teamsBox.querySelectorAll('button,input')].filter(x=>!x.disabled),first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&root.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&root.activeElement===last){e.preventDefault();first?.focus();}}return;
+  }if(e.key==='Escape')close();if(e.key==='Tab'&&$('overlay').style.display==='block'){const nodes=[...$('panel').querySelectorAll('button,input,select,a')].filter(x=>!x.disabled);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&root.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&root.activeElement===last){e.preventDefault();first.focus();}}});
+  $('export').onclick=()=>{
+    const rows=[['统计说明',reportMeta],['Sprint ID','Sprint','状态',activePeriod.before,activePeriod.after,'增减',activePeriod.rate]];
+    for(const g of groups){const stats=rowsWithTotal(g);for(const r of stats)rows.push([g.id,g.name,r.name,r.before.length,r.after.length,r.after.length-r.before.length,rate(r.before.length,r.after.length)]);}
+    const blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='jira-sprint-analysis-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+})();
+
 })();

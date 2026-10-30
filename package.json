@@ -1,0 +1,1 @@
+{"name":"jira-monitor","version":"6.0.0","private":true,"scripts":{"build":"python3 scripts/build.py","check":"node --check jiraMonitor.user.js","test":"node --test test/*.test.cjs"},"devDependencies":{"jsdom":"^27.0.0"}}
