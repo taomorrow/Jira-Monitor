@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.4.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
+header=t[:t.index('(function ()')].replace('5.5.4','6.5.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.4.0')
+t=t[t.index('(function ()'):].replace('5.5.4','6.5.0')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -75,7 +75,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.4.0',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.5.0',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -138,4 +138,8 @@ t=t.replace("state.active=false;state.paused=false;state.message=e.message;save(
 s=s.replace('<button id="export" disabled>导出 CSV</button>', '<button id="export" disabled>导出 CSV</button><button id="report-export" disabled>导出交互报告</button><label class="report-option"><input id="attach-report" type="checkbox" checked>邮件附交互报告（含 Jira 明细）</label>')
 s=s.replace("$('export').disabled=", "$('report-export').disabled=$('export').disabled=")
 s=s.replace("  let teamsSending=false,teamsFocus;", (root/'src/interactive-report.js').read_text()+"\n"+(root/'src/report-actions.js').read_text()+"\n  let teamsSending=false,teamsFocus;")
+# Batch notifications are one alert list per project; detail sends remain individual.
+t=t.replace("  el('[data-teams]').onclick=async()=>{", (root/'src/timeout-summary.js').read_text()+"\n  el('[data-teams]').onclick=async()=>{")
+t=t.replace("    const s=get();if(teamsSending||s?.active)return;", "    const s=get();if(teamsSending||s?.active)return;\n    if(s?.mode==='batch'){await sendBatchAlerts(s,false);return;}")
+t=t.replace("  make('button','发送 Teams','data-teams',actions);", "  make('button',detailOnly?'发送 Teams':'发送预警列表','data-teams',actions);")
 (root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n})();\n')

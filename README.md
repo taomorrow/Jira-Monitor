@@ -1,4 +1,4 @@
-# Jira Monitor v6.4.0
+# Jira Monitor v6.5.0
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -10,6 +10,12 @@
 4. 打开左侧 **配置中心**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
 
 安装入口：[jiraMonitor.user.js](https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js)。脚本后续更新从本仓库获取。
+
+## 超时预警按项目汇总发送
+
+批量结果中的 **发送预警列表** 会筛选“即将超期 / 已超期”工单，按项目各提交一次 Webhook；同一项目一张 Teams 卡片、一封邮件，不逐 Jira 发送。列表含 Jira 编号、摘要、负责人、命中规则与时长。配置中心开启批量自动通知时，等整轮扫描完成后再提交项目汇总，继续遵循各工单的24小时冷却；手动发送不受冷却限制。暂停或停止后的手动汇总只包含已扫描结果。详情浮窗的单工单手动通知保持原行为。
+
+正常工单不包含在预警列表。Teams 卡片超过容量时显示前若干条并标明总数，邮件保留完整列表，卡片按钮可以打开完整 Jira 工单集合。汇总载荷 `reportType` 为 `timeout-summary`，含 `items` 数组、`attachments` 卡片和 `email`；工作流邮件动作应对一次汇总只发送一次，不要对 `items` 循环发送邮件。
 
 ## 独立交互报告
 
@@ -54,6 +60,7 @@ HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看�
 
 - `src/timeout.user.js`、`src/sprint.user.js` 保存两仓库原始版本，方便核对计算逻辑。
 - `scripts/build.py` 合并模块作用域、统一面板和通知配置，生成唯一安装文件 `jiraMonitor.user.js`。
+- `src/timeout-summary.js` 负责按项目汇总的超时卡片和邮件，保留自动冷却去重。
 - `src/batch-api.js` 负责 REST 批量扫描、暂停续扫和结果提交；全部筛选通过 Jira Search API 分页，当前分页从可见列表提取编号，Dashboard 从已加载组件提取编号。
 - `src/interactive-report.js` 为独立报告生成器，`src/report-actions.js` 对接分析快照、下载和附件编码。
 - `src/sprint-notify.js` 负责多项目独立预览、目标快照和分别推送。

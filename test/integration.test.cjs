@@ -133,3 +133,23 @@ test('current page and Dashboard scan extracted Jira keys directly without searc
  const root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;root.querySelector('[data-scope]').value='page';root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done');assert.equal(job(f).results.length,1);assert.equal(calls.length,1);assert.equal(f.w.location.pathname,dashboard?'/secure/Dashboard.jspa':'/issues/');f.dom.window.close();
  }
 });
+function alertState(){const now=Date.now(),rules=[{name:'DEV',minDays:2,maxDays:3,currentStatuses:['In Progress'],startStatus:'In Progress',forbiddenAfterStart:[]}];const item=(key,days)=>({key,summary:'Summary '+key,assignee:'Demo',assigneeEmail:'demo@example.com',currentStatus:'In Progress',checkedAt:now,rules:[{name:'DEV',seconds:days*86400,checkedAt:now,effectiveMinDays:2,effectiveMaxDays:3}]});return {id:'summary',mode:'batch',apiScan:true,active:false,paused:false,phase:'done',rules,queue:[],index:4,results:[item('CSP-1',2.5),item('CSP-2',4),item('CSP-3',1),item('OSPIT-4',3)]};}
+test('manual timeout sends one list per project, includes alerts only and keeps separate mail recipients',async()=>{
+ const state=alertState(),f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}});
+ f.store.get('jira-monitor-projects-v1').push({projectKey:'OSPIT',webhook:'https://other.logic.azure.com/workflows/osp',recipients:['osp@example.com']});
+ const root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);
+ const csp=JSON.parse(f.requests[0].data);assert.equal(csp.reportType,'timeout-summary');assert.equal(csp.items.length,2);assert.equal(csp.email.to,'test@example.com');assert.ok(csp.email.bodyHtml.includes('CSP-1')&&csp.email.bodyHtml.includes('CSP-2'));assert.doesNotMatch(csp.email.bodyHtml,/CSP-3|OSPIT-4/);assert.equal(csp.attachments[0].content.msteams.entities.length,1);f.requests[0].onload({status:202});await until(()=>f.requests.length===2);
+ const osp=JSON.parse(f.requests[1].data);assert.equal(osp.items.length,1);assert.equal(osp.email.to,'osp@example.com');assert.equal(osp.projectKey,'OSPIT');f.requests[1].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);assert.equal(f.requests.length,2);f.dom.window.close();
+});
+test('automatic timeout waits until scan completion then sends one project list and respects cooldown',async()=>{
+ const f=boot(),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;f.store.get('jira-monitor-projects-v1')[0].autoNotify=true;
+ const issues=[apiIssue('CSP-1'),apiIssue('CSP-2')];for(const i of issues)i.changelog.histories[0].created=new Date(Date.now()-30*86400000).toISOString();
+ let detailCalls=0;f.w.fetch=async path=>{if(path==='/rest/api/2/search')return response({total:2,issues});detailCalls++;assert.equal(f.requests.length,0);return response(issues.find(i=>path.includes('/'+i.key+'?')));};
+ root.querySelector('[data-start]').click();await until(()=>f.requests.length===1);assert.equal(detailCalls,2);assert.equal(job(f).phase,'done');assert.equal(JSON.parse(f.requests[0].data).items.length,2);f.requests[0].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);
+ // Starting a fresh completed scan must not auto-submit the same cooling issues.
+ f.w.fetch=async path=>path==='/rest/api/2/search'?response({total:2,issues}):response(issues.find(i=>path.includes('/'+i.key+'?')));root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done'&&!root.querySelector('[data-start]').disabled);assert.equal(f.requests.length,1);f.dom.window.close();
+});
+test('large alert list stays within Teams card size while email retains every issue',async()=>{
+ const state=alertState();state.results=Array.from({length:160},(_,i)=>({...state.results[0],key:'CSP-'+(i+100),summary:'较长的示例摘要'.repeat(35)}));const f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}}),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;
+ root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data);assert.equal(payload.items.length,160);assert.ok(Buffer.byteLength(JSON.stringify(payload.attachments))<26*1024);assert.match(JSON.stringify(payload.attachments),/卡片显示前/);const mail=new JSDOM(payload.email.bodyHtml);assert.equal(mail.window.document.querySelector('thead').parentElement.querySelectorAll(':scope > tbody > tr').length,160);mail.window.close();f.requests[0].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);f.dom.window.close();
+});

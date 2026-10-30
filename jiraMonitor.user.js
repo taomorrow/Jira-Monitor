@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.4.0
+// @version      6.5.0
 // @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -43,7 +43,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.4.0',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.5.0',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  超时预警',nav),sprintTab=el('button','▥  Sprint Analysis',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';config.id='nav-settings';
@@ -108,11 +108,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.4.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.5.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.4.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.5.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -422,7 +422,7 @@ function initTimeout(detailOnly){
   make('button','暂停','data-pause',actions);
   make('button','停止','data-stop',actions);
   make('button','导出 Excel','data-excel',actions);
-  make('button','发送 Teams','data-teams',actions);
+  make('button',detailOnly?'发送 Teams':'发送预警列表','data-teams',actions);
   // Teams 设置保留在油猴菜单，面板仅展示发送按钮。
   make('p',null,'data-notice',body).style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;max-height:100px;overflow-y:auto';
   make('p',null,'data-teams-status',body).style.cssText='font-size:12px;color:#5e6c84';
@@ -576,8 +576,57 @@ function initTimeout(detailOnly){
     try{const state=await sendOverviewItem(item,rules,true);if(state==='submitted')notice(item.key+' 自动通知已提交');else if(state==='unconfigured')notice(item.key+' 未配置通知目标，仅统计');}
     catch(error){const text=item.key+' 自动通知失败：'+safeError(error);notice(text);showTeamsError(text+'；自动冷却记录保留，请核对工作流。');}
   }
+  function alertSummaryPayload(items,rules,target){
+    const reports=items.map(item=>({item,report:teamsPayload(item,rules,true,target)})).filter(x=>x.report.rules.length);
+    const keys=reports.map(x=>x.item.key),jiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql:'key in ('+keys.join(',')+')'});
+    const warning=reports.filter(x=>x.report.rules.some(r=>r.level==='warning')).length,overdue=reports.filter(x=>x.report.rules.some(r=>r.level==='overdue')).length;
+    const title=target.projectKey+' · 超时预警列表',subtitle=reports.length+' 条工单 · 即将超期 '+warning+' 条 · 已超期 '+overdue+' 条（同一工单可命中不同规则）';
+    const rows=reports.map(({item,report})=>[item.key,item.summary,item.assignee||'未分配',report.rules.map(r=>r.name+' '+r.sla+' · '+r.days.toFixed(2)+'天').join(' / ')]);
+    const text=title+'\n'+subtitle+'\n'+rows.map(row=>row.join(' | ')).join('\n');
+    const body=[{type:'TextBlock',text:title,weight:'Bolder',size:'Medium',wrap:true},{type:'TextBlock',text:subtitle,wrap:true}];
+    const card={type:'AdaptiveCard',version:'1.2',msteams:{width:'Full',entities:[]},body,actions:[{type:'Action.OpenUrl',title:'在 Jira 查看全部 '+reports.length+' 条',url:jiraUrl}]};
+    const attachment={contentType:'application/vnd.microsoft.card.adaptive',contentUrl:null,content:card};
+    let displayed=0;
+    for(const {item,report} of reports){
+      const mention=report.attachments[0].content.msteams.entities[0];
+      const block={type:'Container',separator:true,items:[{type:'TextBlock',text:'['+item.key+']('+location.origin+'/browse/'+encodeURIComponent(item.key)+') · '+(mention?mention.text:(item.assignee||'未分配')),weight:'Bolder',wrap:true},{type:'TextBlock',text:String(item.summary||'').slice(0,180),wrap:true,spacing:'Small'},...report.rules.map(r=>({type:'TextBlock',text:r.name+' · '+r.sla+' · '+r.days.toFixed(2)+'天',color:r.level==='overdue'?'Attention':'Warning',wrap:true,spacing:'Small'}))]};
+      body.push(block);
+      if(new TextEncoder().encode(JSON.stringify(attachment)).length>23*1024){body.pop();break;}if(mention&&!card.msteams.entities.some(x=>x.mentioned.id===mention.mentioned.id))card.msteams.entities.push(mention);displayed++;
+    }
+    if(displayed<reports.length)body.push({type:'TextBlock',text:'卡片显示前 '+displayed+' 条，共 '+reports.length+' 条；完整列表见邮件或下方 Jira 按钮。',wrap:true,isSubtle:true});
+    const meta='扫描时间：'+beijingTime(Math.max(...reports.map(x=>x.item.checkedAt||0)));
+    const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+target.projectKey+' · 超时预警列表（'+reports.length+'条）',bodyText:text,bodyHtml:hub.emailCard({title,subtitle,sections:[{title:'即将超期 / 已超期',headers:['Jira','摘要','负责人','规则与时长'],rows}],meta,url:jiraUrl})}:{enabled:false};
+    return {type:'message',reportType:'timeout-summary',projectKey:target.projectKey,jiraUrl,summary:subtitle,text,email,scanTime:meta,items:reports.map(({item,report})=>({jiraKey:item.key,summary:item.summary,assignee:item.assignee,jiraUrl:report.jiraUrl,rules:report.rules})),attachments:[attachment]};
+  }
+  function alertCooldownKey(item,target){return 'jira-monitor-teams-cooldown-v2:'+target.projectKey+':'+item.key+':'+target.webhook+':'+(target.recipients||[]).map(x=>x.toLowerCase()).sort().join(';');}
+  async function sendBatchAlerts(source,automatic=false){
+    if(teamsSending)return;
+    teamsSending=true;render();
+    const state=JSON.parse(JSON.stringify(source)),rules=state.rules||CONFIG.rules,groups=new Map(),outcomes=[];
+    for(const item of state.results||[]){if(!hasTeamsAlert(item,rules))continue;const key=projectKeyOf(item.key);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
+    try{
+      if(!groups.size){notice('没有即将超期或已超期的工单，无需发送。');return;}
+      for(const [key,items] of groups){
+        const send=async()=>{
+          const configured=projectTarget(items[0].key);if(!configured?.webhook)return key+'：未配置通知目标，跳过';
+          const target={...configured,recipients:[...(configured.recipients||[])]};
+          if(automatic&&!target.autoNotify)return key+'：批量自动通知未开启，跳过';
+          const eligible=automatic?items.filter(item=>!(GM_getValue(alertCooldownKey(item,target),null)?.until>Date.now())):items;
+          if(!eligible.length)return key+'：全部工单仍在通知冷却期，跳过';
+          const payload=alertSummaryPayload(eligible,rules,target);
+          if(automatic){const hours=Number(CONFIG.notificationCooldownHours);if(!Number.isFinite(hours)||hours<=0)throw Error('通知冷却时间无效');for(const item of eligible)GM_setValue(alertCooldownKey(item,target),{until:Date.now()+hours*3600000,state:'submitted'});}
+          await postTeams(payload,target.webhook);return key+'：已提交 1 份预警列表（'+eligible.length+' 条工单）';
+        };
+        try{notice('正在提交 '+key+' 预警列表…');outcomes.push(typeof navigator!=='undefined'&&navigator.locks?.request?await navigator.locks.request('jira-monitor-teams-notify',send):await send());}
+        catch(error){outcomes.push(key+'：提交失败或结果未知；'+safeError(error)+'。未自动重试。');showTeamsError(outcomes.join('\n'));}
+      }
+      notice(outcomes.join('\n')+'\n每个项目分别提交；Webhook 接收不代表 Teams / 邮件已投递。');
+    }finally{teamsSending=false;render();}
+  }
+
   el('[data-teams]').onclick=async()=>{
     const s=get();if(teamsSending||s?.active)return;
+    if(s?.mode==='batch'){await sendBatchAlerts(s,false);return;}
     const items=(s?.results||[]).filter(item=>item.rules?.some(r=>Number.isFinite(r.seconds)));
     if(!items.length){notice('没有有效计时结果，无需发送');return;}
     el('[data-teams-errors]').hidden=true;el('[data-teams-errors]').textContent='';
@@ -781,7 +830,7 @@ function initTimeout(detailOnly){
     try{
       while(true){
         const state=valid(id,token);
-        if(state.index>=state.queue.length){state.active=false;state.paused=false;state.phase='done';state.message=state.dashboardScan?'Dashboard 已加载工单接口扫描完成（不含未加载的小组件分页）':`接口扫描完成：${state.index}/${state.queue.length} 条（查询共 ${state.total??state.queue.length} 条）`;save(state);break;}
+        if(state.index>=state.queue.length){state.active=false;state.paused=false;state.phase='done';state.message=state.dashboardScan?'Dashboard 已加载工单接口扫描完成（不含未加载的小组件分页）':`接口扫描完成：${state.index}/${state.queue.length} 条（查询共 ${state.total??state.queue.length} 条）`;save(state);if(!state.autoSummaryAttempted){state.autoSummaryAttempted=true;save(state);await sendBatchAlerts(state,true);}break;}
         const item=state.queue[state.index];update(`接口读取 ${item.key}（${state.index+1}/${state.queue.length}）…`);
         const data=await issueHistory(item.key,()=>valid(id,token));
         const current=valid(id,token),now=Date.now();
@@ -789,7 +838,7 @@ function initTimeout(detailOnly){
         current.results.push(result);current.index++;current.phase='reading';current.message=`接口扫描 ${current.index}/${current.queue.length} · ${item.key}`;
         // Persist the completed item before notification, so pause/reload cannot count it twice.
         save(current);render();
-        await autoNotifyOverview(result,current.rules);valid(id,token);
+        valid(id,token);
       }
     }catch(error){
       if(error.message!=='CANCELLED'){
@@ -957,7 +1006,7 @@ function initTimeout(detailOnly){
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
   if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.4.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.5.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);

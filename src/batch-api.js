@@ -6,7 +6,7 @@
     try{
       while(true){
         const state=valid(id,token);
-        if(state.index>=state.queue.length){state.active=false;state.paused=false;state.phase='done';state.message=state.dashboardScan?'Dashboard 已加载工单接口扫描完成（不含未加载的小组件分页）':`接口扫描完成：${state.index}/${state.queue.length} 条（查询共 ${state.total??state.queue.length} 条）`;save(state);break;}
+        if(state.index>=state.queue.length){state.active=false;state.paused=false;state.phase='done';state.message=state.dashboardScan?'Dashboard 已加载工单接口扫描完成（不含未加载的小组件分页）':`接口扫描完成：${state.index}/${state.queue.length} 条（查询共 ${state.total??state.queue.length} 条）`;save(state);if(!state.autoSummaryAttempted){state.autoSummaryAttempted=true;save(state);await sendBatchAlerts(state,true);}break;}
         const item=state.queue[state.index];update(`接口读取 ${item.key}（${state.index+1}/${state.queue.length}）…`);
         const data=await issueHistory(item.key,()=>valid(id,token));
         const current=valid(id,token),now=Date.now();
@@ -14,7 +14,7 @@
         current.results.push(result);current.index++;current.phase='reading';current.message=`接口扫描 ${current.index}/${current.queue.length} · ${item.key}`;
         // Persist the completed item before notification, so pause/reload cannot count it twice.
         save(current);render();
-        await autoNotifyOverview(result,current.rules);valid(id,token);
+        valid(id,token);
       }
     }catch(error){
       if(error.message!=='CANCELLED'){
