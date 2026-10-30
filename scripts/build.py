@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.2.1').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
+header=t[:t.index('(function ()')].replace('5.5.4','6.3.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.2.1')
+t=t[t.index('(function ()'):].replace('5.5.4','6.3.0')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -75,7 +75,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.2.1',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.3.0',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -117,4 +117,21 @@ s=s.replace("const o=text('option',key,picker);o.value=key;", "const label=text(
 s=s.replace("  $('launch').style.display='none';", """  const toolbar=document.createElement('div');toolbar.className='query-toolbar';const controls=root.querySelector('.controls');controls.before(toolbar);toolbar.append($('period').parentElement,$('load'));
   const compact=document.createElement('style');compact.textContent='.query-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:16px 0}.query-toolbar label{width:240px;max-width:100%}.query-toolbar #load{width:auto;min-width:0;padding:8px 14px}.controls{align-items:start}#notify-box{grid-column:1/-1;padding:8px 12px}#notify-project{display:flex;gap:8px;flex-wrap:wrap;padding:4px 0}#notify-project label{display:inline-flex;flex-direction:row;align-items:center;gap:6px;background:#fff;border:1px solid #dce4f1;border-radius:7px;padding:7px 12px;cursor:pointer}#notify-project input{margin:0}.controls>#run,.controls>#export,.controls>#teams-preview{width:max-content;max-width:100%}.query-toolbar select{width:100%}';root.append(compact);
   $('launch').style.display='none';""")
+t=t.replace("node.closest?.('#jira-duration-panel-host')", "node.closest?.('#jira-duration-panel-host, #jira-monitor-hub, #jira-detail-panel-host')")
+t=t.replace("node.id!=='jira-duration-panel-host'", "!['jira-duration-panel-host','jira-monitor-hub','jira-detail-panel-host'].includes(node.id)")
+# Batch lists use REST exclusively, including full search and history pagination.
+t=t.replace("  async function pump() {", (root/'src/batch-api.js').read_text()+"\n  async function pump() {")
+t=t.replace("    if(s.jobDirect)return;", """    if(s.mode==='batch'){
+      if(!s.apiScan){s.active=false;s.paused=true;s.message='旧版逐页任务已暂停，请停止后重新开始接口扫描；原结果可导出。';save(s);render();return;}
+      if(s.phase==='collecting')await continueCollection();else await scanDirect();return;
+    }
+    if(s.jobDirect)return;""")
+t=t.replace("  el('[data-pause]').onclick=()=>{", """  const startSingle=el('[data-start]').onclick;
+  el('[data-start]').onclick=()=>detailOnly||isDetail()?startSingle():startApiBatch();
+  el('[data-pause]').onclick=()=>{""")
+t=t.replace("async function issueHistory(key){", "async function issueHistory(key,checkpoint=()=>{}){\n    checkpoint();")
+t=t.replace("    let histories=data.changelog?.histories;", "    checkpoint();let histories=data.changelog?.histories;")
+t=t.replace("        const page=await api('/rest/api/2/issue/'", "        checkpoint();const page=await api('/rest/api/2/issue/'")
+t=t.replace("        const batch=page.values||page.histories;", "        checkpoint();const batch=page.values||page.histories;")
+t=t.replace("state.active=false;state.paused=false;state.message=e.message;save(state);", "state.active=false;state.paused=true;state.message=e.message;save(state);")
 (root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n})();\n')

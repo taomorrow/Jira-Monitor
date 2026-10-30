@@ -102,3 +102,34 @@ test('detail routes never display the batch list, including active/paused jobs a
  }
  const f=boot('/issues/');f.hub.querySelector('#launcher').click();assert.equal(f.hub.querySelector('#shell').hidden,false);f.w.history.pushState({},'', '/browse/CSP-9');f.w.dispatchEvent(new f.w.PopStateEvent('popstate'));assert.equal(f.hub.querySelector('#shell').hidden,true);f.dom.window.close();
 });
+const response=data=>({ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>data});
+function apiIssue(key,status='In Progress'){return {key,fields:{summary:'Issue '+key,status:{name:status},assignee:{displayName:'Demo'},issuetype:{name:'Task'}},changelog:{startAt:0,total:1,histories:[{id:'1',created:new Date(Date.now()-86400000).toISOString(),items:[{field:'status',fromString:'Open',toString:'In Progress'}]}]}};}
+const job=f=>JSON.parse(f.w.sessionStorage.getItem('jira-monitor-batch-v5'));
+async function until(predicate){for(let i=0;i<100;i++){if(predicate())return;await new Promise(r=>setTimeout(r,1));}assert.ok(predicate(),'condition not reached');}
+test('full batch uses paginated REST search and histories without clicking or navigating',async()=>{
+ const f=boot(),calls=[],issues=[apiIssue('CSP-1'),apiIssue('CSP-2','Completed'),apiIssue('CSP-3')],url=f.w.location.href;
+ f.w.HTMLElement.prototype.scrollIntoView=()=>{throw Error('Unexpected DOM navigation');};
+ f.w.fetch=async(path,options={})=>{calls.push(path);if(path==='/rest/api/2/search'){const body=JSON.parse(options.body);assert.equal(body.jql,'project=CSP');return response({total:3,issues:body.startAt===0?issues.slice(0,2):issues.slice(2)});}const key=path.match(/issue\/([^/?]+)/)?.[1];return response(issues.find(i=>i.key===key));};
+ const root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done');
+ assert.equal(f.w.location.href,url);assert.equal(calls.filter(x=>x==='/rest/api/2/search').length,2);assert.equal(calls.filter(x=>x.includes('/issue/')).length,2);assert.equal(job(f).results.length,2);assert.equal(job(f).results[0].rules[0].seconds>=86400,true);assert.equal(f.hub.querySelector('#shell').hidden,false);f.dom.window.close();
+});
+test('pause discards an in-flight history page; resume counts once and never navigates',async()=>{
+ const f=boot(),issue=apiIssue('CSP-1'),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;let resolve,first=true,historyCalls=0;
+ f.w.fetch=async(path)=>{if(path==='/rest/api/2/search')return response({total:1,issues:[issue]});if(path.includes('/changelog?')){historyCalls++;if(first){first=false;return new Promise(r=>resolve=r);}return response({total:2,values:issue.changelog.histories});}return response({...issue,changelog:{startAt:0,total:2,histories:[]}});};
+ root.querySelector('[data-start]').click();await until(()=>resolve);root.querySelector('[data-pause]').click();resolve(response({total:2,values:issue.changelog.histories}));await new Promise(r=>setTimeout(r,3));assert.equal(job(f).index,0);assert.equal(historyCalls,1);
+ root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done');assert.equal(job(f).index,1);assert.equal(job(f).results.length,1);assert.equal(f.w.location.pathname,'/issues/');f.dom.window.close();
+});
+test('REST failure pauses on current issue and stop rejects late responses',async()=>{
+ const f=boot(),issue=apiIssue('CSP-1'),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;let fail=true,resolve;
+ f.w.fetch=async path=>{if(path==='/rest/api/2/search')return response({total:1,issues:[issue]});if(fail)return {ok:false,status:403};return new Promise(r=>resolve=r);};
+ root.querySelector('[data-start]').click();await until(()=>job(f)?.paused);assert.equal(job(f).index,0);assert.match(job(f).message,/403/);fail=false;root.querySelector('[data-start]').click();await until(()=>resolve);root.querySelector('[data-stop]').click();resolve(response(issue));await new Promise(r=>setTimeout(r,3));assert.equal(job(f).phase,'stopped');assert.equal(job(f).results.length,0);f.dom.window.close();
+});
+test('current page and Dashboard scan extracted Jira keys directly without search or link clicks',async()=>{
+ for(const dashboard of [false,true]){
+ const f=boot(dashboard?'/secure/Dashboard.jspa':'/issues/');
+ f.w.document.getElementById('issuetable').innerHTML='<table><tr><td class="summary"><a href="/browse/CSP-1">Demo summary</a></td><td class="status">In Progress</td></tr></table>';
+ const anchor=f.w.document.querySelector('a');anchor.addEventListener('click',()=>{throw Error('Unexpected click');});const calls=[];
+ f.w.fetch=async path=>{calls.push(path);assert.ok(path.startsWith('/rest/api/2/issue/CSP-1'));return response(apiIssue('CSP-1'));};
+ const root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;root.querySelector('[data-scope]').value='page';root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done');assert.equal(job(f).results.length,1);assert.equal(calls.length,1);assert.equal(f.w.location.pathname,dashboard?'/secure/Dashboard.jspa':'/issues/');f.dom.window.close();
+ }
+});

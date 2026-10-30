@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.2.1
+// @version      6.3.0
 // @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -43,7 +43,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.2.1',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.3.0',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  超时预警',nav),sprintTab=el('button','▥  Sprint Analysis',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';config.id='nav-settings';
@@ -108,11 +108,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.2.1 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.3.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.2.1 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.3.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -595,16 +595,17 @@ function initTimeout(detailOnly){
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
     try{const res=await fetch(path,{...options,credentials:'same-origin',headers:{Accept:'application/json',...(options.headers||{})},signal:controller.signal});if(!res.ok)throw new Error('Jira HTTP '+res.status);return await res.json();}finally{clearTimeout(timer);}
   }
-  async function issueHistory(key){
+  async function issueHistory(key,checkpoint=()=>{}){
+    checkpoint();
     const data=await api('/rest/api/2/issue/'+encodeURIComponent(key)+'?fields=assignee,status,summary,issuetype&expand=changelog');
-    let histories=data.changelog?.histories;
+    checkpoint();let histories=data.changelog?.histories;
     if(!Array.isArray(histories))throw new Error('接口未返回 changelog');
     const total=data.changelog.total;
     if(!Number.isInteger(total)||data.changelog.startAt>0||histories.length<total){
       histories=[];let startAt=0;
       do{
-        const page=await api('/rest/api/2/issue/'+encodeURIComponent(key)+'/changelog?startAt='+startAt+'&maxResults=100');
-        const batch=page.values||page.histories;
+        checkpoint();const page=await api('/rest/api/2/issue/'+encodeURIComponent(key)+'/changelog?startAt='+startAt+'&maxResults=100');
+        checkpoint();const batch=page.values||page.histories;
         if(!Array.isArray(batch)||!Number.isInteger(page.total)||!batch.length&&startAt<page.total)throw new Error('历史分页不完整');
         histories.push(...batch);startAt+=batch.length;
         if(startAt>=page.total)break;
@@ -655,7 +656,7 @@ function initTimeout(detailOnly){
     try{
       const {queue,total,jql}=await allIssues(id,token);const state=valid(id,token);
       Object.assign(state,{queue,total,jql,phase:'list',message:`全部${total}条，符合状态范围${queue.length}条`});delete state.collection;save(state);
-    }catch(e){if(e.message!=='CANCELLED'){const state=get();if(state?.id===id&&state.active&&token===epoch){state.active=false;state.paused=false;state.message=e.message;save(state);}}}
+    }catch(e){if(e.message!=='CANCELLED'){const state=get();if(state?.id===id&&state.active&&token===epoch){state.active=false;state.paused=true;state.message=e.message;save(state);}}}
     finally{if(token===epoch)busy=false;render();}
     if(token===epoch)pump();
   }
@@ -680,7 +681,7 @@ function initTimeout(detailOnly){
     const walk=root=>{
       if(!root||visited.has(root))return;visited.add(root);roots++;
       for(const node of root.querySelectorAll('a, [data-issue-key], [data-issuekey]')){
-        if(node.closest?.('#jira-duration-panel-host'))continue;
+        if(node.closest?.('#jira-duration-panel-host, #jira-monitor-hub, #jira-detail-panel-host'))continue;
         const raw=node.getAttribute?.('href')||node.href||'';let key='';
         if(raw&&!/^javascript:/i.test(raw)){try{
           const url=new URL(raw,location.href);if(url.origin!==location.origin)continue;
@@ -690,7 +691,7 @@ function initTimeout(detailOnly){
         key=issueKey(key)||issueKey(node.getAttribute?.('data-issue-key'))||issueKey(node.getAttribute?.('data-issuekey'))||issueKey(node.textContent);
         if(key&&!found.has(key))found.set(key,{key,href:location.origin+'/browse/'+encodeURIComponent(key),summary:node.textContent?.trim()||key});
       }
-      for(const node of root.querySelectorAll('*')){if(node.shadowRoot&&node.id!=='jira-duration-panel-host')walk(node.shadowRoot);}
+      for(const node of root.querySelectorAll('*')){if(node.shadowRoot&&!['jira-duration-panel-host','jira-monitor-hub','jira-detail-panel-host'].includes(node.id))walk(node.shadowRoot);}
       for(const frame of root.querySelectorAll('iframe, frame')){
         frames++;try{const doc=frame.contentDocument;if(doc)walk(doc);else blocked++;}catch{blocked++;}
       }
@@ -772,9 +773,58 @@ function initTimeout(detailOnly){
       if(!onOverview())location.replace(x.listUrl);else pump();
     },1800);
   }
+  // Read Jira REST data in the current tab; never click issue links or navigate.
+  async function scanDirect(){
+    if(busy)return;
+    const initial=get();if(!initial?.active||initial.mode!=='batch')return;
+    const id=initial.id,token=epoch;busy=true;
+    try{
+      while(true){
+        const state=valid(id,token);
+        if(state.index>=state.queue.length){state.active=false;state.paused=false;state.phase='done';state.message=state.dashboardScan?'Dashboard 已加载工单接口扫描完成（不含未加载的小组件分页）':`接口扫描完成：${state.index}/${state.queue.length} 条（查询共 ${state.total??state.queue.length} 条）`;save(state);break;}
+        const item=state.queue[state.index];update(`接口读取 ${item.key}（${state.index+1}/${state.queue.length}）…`);
+        const data=await issueHistory(item.key,()=>valid(id,token));
+        const current=valid(id,token),now=Date.now();
+        const result={...item,summary:data.summary,assignee:data.assignee,assigneeEmail:data.assigneeEmail,assigneeAccount:data.assigneeAccount,currentStatus:data.status,checkedAt:now,source:data.source,rules:evaluateHistory(data.events,data.status,current.rules,now)};
+        current.results.push(result);current.index++;current.phase='reading';current.message=`接口扫描 ${current.index}/${current.queue.length} · ${item.key}`;
+        // Persist the completed item before notification, so pause/reload cannot count it twice.
+        save(current);render();
+        await autoNotifyOverview(result,current.rules);valid(id,token);
+      }
+    }catch(error){
+      if(error.message!=='CANCELLED'){
+        const state=get();if(state?.id===id&&token===epoch){state.active=false;state.paused=true;state.message='接口扫描暂停：'+safeError(error)+'；已保留进度，点击开始统计重试当前工单。';save(state);}
+      }
+    }finally{if(token===epoch)busy=false;render();}
+  }
+  async function startApiBatch(){
+    const previous=get();if(previous?.active||teamsSending)return;
+    if(previous?.paused&&previous.mode==='batch'){
+      if(!previous.apiScan){notice('这是旧版逐页扫描任务。请先停止，再重新开始接口扫描；旧结果仍可导出。');return;}
+      epoch++;busy=false;previous.active=true;previous.paused=false;previous.jobDirect=false;previous.message='继续接口扫描，保留已完成结果';save(previous);render();
+      if(previous.phase==='collecting')await continueCollection();else await scanDirect();return;
+    }
+    epoch++;busy=false;
+    const state={id:'api-'+Date.now()+'-'+epoch,mode:'batch',apiScan:true,active:true,paused:false,rules:JSON.parse(JSON.stringify(CONFIG.rules)),scope:scope.value,listUrl:location.href,queue:[],index:0,results:[],phase:'reading'};
+    if(isDashboard()){
+      state.dashboardScan=true;state.queue=dashboardIssues();state.total=state.queue.length;
+      if(!state.queue.length){notice('Dashboard 未识别到工单编号。'+dashboardDiagnostics);return;}
+    }else if(scope.value==='all'){
+      state.phase='collecting';state.message='通过接口收集当前查询的全部分页…';save(state);render();await continueCollection();return;
+    }else{
+      state.queue=summaryLinks().filter(item=>!item.currentStatus||state.rules.some(rule=>rule.currentStatuses.map(norm).includes(norm(item.currentStatus)))).map(({anchor,...item})=>item);state.total=state.queue.length;
+      if(!state.queue.length){notice('当前页未找到符合状态范围的工单，请等待 Jira 列表加载后重试。');return;}
+    }
+    save(state);render();await scanDirect();
+  }
+
   async function pump() {
     if(busy)return;
     let s=get();if(!s?.active){render();return;}
+    if(s.mode==='batch'){
+      if(!s.apiScan){s.active=false;s.paused=true;s.message='旧版逐页任务已暂停，请停止后重新开始接口扫描；原结果可导出。';save(s);render();return;}
+      if(s.phase==='collecting')await continueCollection();else await scanDirect();return;
+    }
     if(s.jobDirect)return;
     if(s.phase==='collecting'){continueCollection();return;}
     busy=true;const token=epoch;
@@ -862,6 +912,8 @@ function initTimeout(detailOnly){
     if(!links.length){alert('未找到 Summary 链接，请切换到截图中的列表视图并等待加载完成。');return;}
     save({id:String(Date.now()),active:true,mode:'batch',scope:'page',rules:JSON.parse(JSON.stringify(CONFIG.rules)),listUrl:location.href,queue:links.map(({anchor,...item})=>item),index:0,results:[],phase:'list',message:`已记录当前页 ${links.length} 条 Jira`});render();pump();
   };
+  const startSingle=el('[data-start]').onclick;
+  el('[data-start]').onclick=()=>detailOnly||isDetail()?startSingle():startApiBatch();
   el('[data-pause]').onclick=()=>{
     const s=get();if(!s?.active)return;
     s.active=false;s.paused=true;s.message='已保留进度，点击开始统计继续';save(s);
@@ -905,7 +957,7 @@ function initTimeout(detailOnly){
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
   if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.2.1 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.3.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
