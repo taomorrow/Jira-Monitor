@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.5.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
+header=t[:t.index('(function ()')].replace('5.5.4','6.5.1').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.5.0')
+t=t[t.index('(function ()'):].replace('5.5.4','6.5.1')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -75,7 +75,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.5.0',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.5.1',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -142,4 +142,12 @@ s=s.replace("  let teamsSending=false,teamsFocus;", (root/'src/interactive-repor
 t=t.replace("  el('[data-teams]').onclick=async()=>{", (root/'src/timeout-summary.js').read_text()+"\n  el('[data-teams]').onclick=async()=>{")
 t=t.replace("    const s=get();if(teamsSending||s?.active)return;", "    const s=get();if(teamsSending||s?.active)return;\n    if(s?.mode==='batch'){await sendBatchAlerts(s,false);return;}")
 t=t.replace("  make('button','发送 Teams','data-teams',actions);", "  make('button',detailOnly?'发送 Teams':'发送预警列表','data-teams',actions);")
+# One workflow order drives filter choices and every statistical/export channel.
+import json
+status_names=json.loads((root/'src/status-order.json').read_text())
+start=s.index('  const STATUS_NAMES=')
+end=s.index('\n',start)
+s=s[:start]+'  const STATUS_NAMES='+json.dumps(status_names,ensure_ascii=False)+';'+s[end:]
+s=s.replace("a.name.localeCompare(b.name)", "(STATUS_NAMES.findIndex(n=>normalized(n)===normalized(a.name))+1||STATUS_NAMES.length+1)-(STATUS_NAMES.findIndex(n=>normalized(n)===normalized(b.name))+1||STATUS_NAMES.length+1)||a.name.localeCompare(b.name)")
+s=s.replace('以下 12 个','以下 '+str(len(status_names))+' 个').replace('全部指定的 12 个状态','全部指定的 '+str(len(status_names))+' 个状态')
 (root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n})();\n')

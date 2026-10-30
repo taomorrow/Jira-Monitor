@@ -1,4 +1,4 @@
-# Jira Monitor v6.5.0
+# Jira Monitor v6.5.1
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -10,6 +10,14 @@
 4. 打开左侧 **配置中心**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
 
 安装入口：[jiraMonitor.user.js](https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js)。脚本后续更新从本仓库获取。
+
+## 状态流程顺序
+
+状态筛选、Sprint 页面统计、CSV、Teams 卡片、邮件表格、独立交互报告统一使用：
+
+New → Grooming → Open → In Progress → Ready For Test → Testing → Completed → SIT → Ready For UAT → UAT → Ready For Deploy → DEPLOYED → Done → Cancelled。
+
+Cancelled 是旁路状态，置于主流程末尾；合计始终最后。默认全部状态包含图中 14 个状态，补齐 Done、Cancelled。仅选择部分状态时仍遵循同一顺序，状态名匹配忽略大小写。顺序配置保存在 `src/status-order.json`。
 
 ## 超时预警按项目汇总发送
 
@@ -38,7 +46,7 @@ Sprint 分析完成后点击 **导出交互报告**，获得单文件 HTML。用
 | 超时预警 | Sprint Analysis |
 | --- | --- |
 | DEV / DCT 状态历史、首次进入时间、排除状态 | 当前 Jira 查询全部分页、完整状态历史 |
-| 自定义阈值和状态、周五 10:30 / 17:00 阈值调整 | 按上海时间日 / 周对比、Sprint 多选、12 种状态筛选 |
+| 自定义阈值和状态、周五 10:30 / 17:00 阈值调整 | 按上海时间日 / 周对比、Sprint 多选、14 种状态筛选 |
 | 当前页 / 全分页 / Dashboard、暂停续扫、停止 | 统计表、状态数量明细、净变化明细 |
 | Excel 导出、按项目通知、冷却和负责人提及 | CSV 导出、Teams 卡片预览、确认推送 |
 
