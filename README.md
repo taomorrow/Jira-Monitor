@@ -9,7 +9,7 @@
 3. 在统一面板选择 **超时预警** 或 **Sprint Analysis**。默认不会因打开详情页就开始分析；需要时勾选“详情自动分析”，该选择会保存在本地。
 4. 打开 **共享 Teams / 邮件配置**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
 
-本地文件为待审阅版本；GitHub 上的安装链接在发布前仍是原版本。
+安装入口：[jiraMonitor.user.js](https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js)。脚本后续更新从本仓库获取。
 
 ## 功能
 

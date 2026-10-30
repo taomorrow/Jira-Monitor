@@ -3,6 +3,7 @@ root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
 header=t[:t.index('(function ()')].replace('5.5.4','6.0.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
+header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
 t=t[t.index('(function ()'):].replace('5.5.4','6.0.0')

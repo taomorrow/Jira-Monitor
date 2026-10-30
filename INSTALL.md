@@ -1,6 +1,6 @@
 # 安装 Jira Monitor
 
-通过 Tampermonkey 安装本目录 `jiraMonitor.user.js`，停用独立 Sprint Analysis，然后刷新 Jira。
+通过 Tampermonkey [安装 Jira Monitor](https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js)，停用独立 Sprint Analysis，然后刷新 Jira。
 
 右下角 Jira Monitor → 共享 Teams / 邮件配置 → 按项目 Key 保存通知目标。
 

@@ -13,10 +13,10 @@
 // @connect      api.powerplatform.com
 // @connect      logic.azure.com
 // @connect      api.powerautomate.com
-// @homepageURL  https://github.com/taomorrow/Jira
-// @supportURL   https://github.com/taomorrow/Jira/issues
-// @downloadURL  https://raw.githubusercontent.com/taomorrow/Jira/main/jiraMonitor.user.js
-// @updateURL    https://raw.githubusercontent.com/taomorrow/Jira/main/jiraMonitor.user.js
+// @homepageURL  https://github.com/taomorrow/Jira-Monitor
+// @supportURL   https://github.com/taomorrow/Jira-Monitor/issues
+// @downloadURL  https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js
+// @updateURL    https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js
 // @run-at       document-idle
 // @noframes
 // ==/UserScript==
