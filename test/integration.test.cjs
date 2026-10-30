@@ -33,11 +33,12 @@ test('mixed project Sprint reports route only selected project totals and shared
  const root=f.hub.querySelector('#jsa-host').shadowRoot;
  async function click(id){root.getElementById(id).click();for(let i=0;i<100&&root.getElementById('run').disabled;i++)await new Promise(r=>setTimeout(r,1));}
  await click('load');await click('run');assert.match(root.getElementById('message').textContent,/分析完成/);
- assert.equal(root.getElementById('notify-project').options.length,2);
- root.getElementById('notify-project').value='CSP';await click('teams-preview');assert.equal(f.requests.length,0);assert.ok(root.getElementById('teams-preview-content'),root.getElementById('message').textContent);assert.match(root.getElementById('teams-preview-content').textContent,/Shared Sprint/);
+ assert.equal(root.getElementById('notify-project').querySelectorAll('input').length,2);
+ for(const input of root.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='CSP';
+ root.getElementById('notify-project').querySelector('input[value="CSP"]').checked=true;await click('teams-preview');assert.equal(f.requests.length,0);assert.ok(root.getElementById('teams-preview-content'),root.getElementById('message').textContent);assert.match(root.getElementById('teams-preview-content').textContent,/Shared Sprint/);
  root.getElementById('teams-send').click();assert.equal(f.requests.length,1);const request=f.requests[0],payload=JSON.parse(request.data);
  assert.equal(request.url,f.store.get('jira-monitor-projects-v1')[0].webhook);assert.equal(payload.projectKey,'CSP');assert.equal(payload.email.to,'test@example.com');const mail=new JSDOM(payload.email.bodyHtml).window.document;assert.ok(mail.querySelector('table thead th'));assert.match(mail.body.textContent,/所选状态合计/);assert.equal(mail.querySelector('pre'),null);assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);assert.doesNotMatch(payload.email.bodyText,/OSPIT-2/);
- request.onload({status:202});root.getElementById('teams-preview-cancel').click();root.getElementById('notify-project').value='OSPIT';await click('teams-preview');assert.equal(f.requests.length,1);assert.match(root.getElementById('message').textContent,/配置/);f.dom.window.close();
+ request.onload({status:202});await new Promise(r=>setTimeout(r,1));root.getElementById('teams-preview-cancel').click();for(const input of root.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='OSPIT';await click('teams-preview');assert.equal(f.requests.length,1);assert.match(root.getElementById('message').textContent,/配置/);f.dom.window.close();
 });
 test('shared settings reject duplicate keys and unsafe webhook URLs; HEAD sends no report',()=>{
  const f=boot();f.hub.querySelector('#nav-settings').click();
@@ -69,4 +70,27 @@ test('detail popup completes analysis separately and emails a safe card',async()
  const f=boot('/browse/CSP-9',{auto:true,setup(w){w.fetch=async()=>({ok:true,headers:{get:()=> 'application/json'},json:async()=>({fields:{status:{name:'In Progress'},summary:'<script>unsafe</script>',assignee:{displayName:'Demo'}},changelog:{startAt:0,total:1,histories:[{id:'1',created:new Date(Date.now()-86400000).toISOString(),items:[{field:'status',fromString:'Open',toString:'In Progress'}]}]}})});}});
  await new Promise(r=>setTimeout(r,10));const state=JSON.parse(f.w.sessionStorage.getItem('jira-monitor-auto-detail-v1'));assert.equal(state.active,false);assert.equal(state.results.length,1);assert.equal(f.w.sessionStorage.getItem('jira-monitor-manual-detail-v1'),null);
  const popup=f.hub.querySelector('#jira-detail-panel-host').shadowRoot;assert.match(popup.querySelector('[data-progress]').textContent,/完成/);popup.querySelector('[data-teams]').click();await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,1);const email=JSON.parse(f.requests[0].data).email;assert.match(email.bodyHtml,/<table/);assert.match(email.bodyHtml,/&lt;script&gt;/);assert.doesNotMatch(email.bodyHtml,/<script>/);f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));f.dom.window.close();
+});
+test('launcher drag saves position without opening; rules close is at the top',()=>{
+ const f=boot(),w=f.w,root=f.hub,launcher=root.querySelector('#launcher');
+ const event=(type,x,y)=>new w.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y});launcher.dispatchEvent(event('pointerdown',10,10));launcher.dispatchEvent(event('pointermove',180,140));launcher.dispatchEvent(event('pointerup',180,140));launcher.click();assert.equal(root.querySelector('#shell').hidden,true);assert.ok(f.store.get('jira-monitor-launcher-v1').left>0);launcher.click();assert.equal(root.querySelector('#shell').hidden,false);
+ root.querySelector('#nav-settings').click();root.querySelector('[data-center-rules]').click();const modal=[...w.document.querySelectorAll('div')].find(n=>n.shadowRoot?.querySelector('[data-rule-close]'));assert.ok(modal);const close=modal.shadowRoot.querySelector('[data-rule-close]');assert.equal(close.textContent,'❌');assert.equal(close.parentElement.firstElementChild,close);assert.equal([...modal.shadowRoot.querySelectorAll('button')].filter(b=>b.textContent==='关闭').length,0);close.click();assert.equal(modal.isConnected,false);f.dom.window.close();
+});
+test('paused batch reopens its controls automatically on the next Jira page',()=>{
+ const f=boot('/browse/CSP-9',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify({id:'batch-1',mode:'batch',active:false,paused:true,rules:[],queue:[{key:'CSP-9'}],results:[],index:0,phase:'reading'}));}});
+ assert.equal(f.hub.querySelector('#shell').hidden,false);assert.equal(f.hub.querySelector('#timeout-view').hidden,false);assert.equal(f.hub.querySelector('#jira-duration-panel-host').shadowRoot.querySelector('[data-stop]').disabled,false);assert.equal(f.hub.querySelector('#detail-popup').hidden,true);f.dom.window.close();
+});
+test('multiple projects freeze destinations and send separate reports once, retaining partial outcomes',async()=>{
+ const f=boot('/issues/?jql=project%20in%20(CSP,OSPIT)'),w=f.w;
+ f.store.get('jira-monitor-projects-v1').push({projectKey:'OSPIT',webhook:'https://other.logic.azure.com/workflows/osp',recipients:['osp@example.com']});
+ const issues=['CSP-1','OSPIT-2'].map(key=>({key,fields:{summary:key,created:'2020-01-01T00:00:00Z',updated:'2026-01-01T00:00:00Z',status:{id:'1',name:'In Progress'},customfield_1:[{id:7,name:'Shared Sprint',state:'active'}]},changelog:{startAt:0,total:0,histories:[]}}));
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);const data=u.pathname.endsWith('/field')?[{id:'customfield_1',schema:{custom:'com.pyxis.greenhopper.jira:gh-sprint'}}]:u.pathname.endsWith('/search')?{total:2,issues}:issues.find(i=>u.pathname.endsWith('/'+i.key));return {ok:true,headers:{get:()=> 'application/json'},json:async()=>data};};
+ const root=f.hub.querySelector('#jsa-host').shadowRoot;async function click(id){root.getElementById(id).click();for(let i=0;i<100&&root.getElementById('run').disabled;i++)await new Promise(r=>setTimeout(r,1));}
+ await click('load');await click('run');await click('teams-preview');assert.equal(f.requests.length,0);assert.match(root.getElementById('teams-send').textContent,/2 个项目/);
+ // Configuration changes after preview must not redirect the reviewed payload.
+ f.store.get('jira-monitor-projects-v1')[1].webhook='https://changed.logic.azure.com/workflows/new';
+ root.getElementById('teams-send').click();root.getElementById('teams-send').click();assert.equal(f.requests.length,1);
+ f.requests[0].onload({status:500});await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,2);assert.equal(f.requests[1].url,'https://other.logic.azure.com/workflows/osp');
+ for(const [i,key,email] of [[0,'CSP','test@example.com'],[1,'OSPIT','osp@example.com']]){const payload=JSON.parse(f.requests[i].data);assert.equal(payload.projectKey,key);assert.equal(payload.email.to,email);assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);}
+ f.requests[1].onload({status:202});await new Promise(r=>setTimeout(r,1));assert.equal(f.requests.length,2);assert.match(root.getElementById('teams-send-status').textContent,/CSP：失败/);assert.match(root.getElementById('teams-send-status').textContent,/OSPIT：已提交/);f.dom.window.close();
 });

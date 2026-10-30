@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.1.0
+// @version      6.2.0
 // @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -27,7 +27,7 @@ const host=document.createElement('div');host.id='jira-monitor-hub';document.doc
 const root=host.attachShadow({mode:'open'});
 const style=document.createElement('style');style.textContent=`
 :host{font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;color:#24334d}*{box-sizing:border-box}button,input,textarea,select{font:inherit}button{cursor:pointer;border:0}button:focus-visible{outline:3px solid #93b9ff;outline-offset:2px}[hidden]{display:none!important}
-#launcher{position:fixed;right:24px;bottom:20px;background:#245de8;color:white;padding:11px 18px;border-radius:12px;box-shadow:0 6px 20px #245de840;z-index:2147483646;font-weight:600}
+#launcher{position:fixed;right:24px;bottom:20px;background:#245de8;color:white;padding:10px 15px;border-radius:16px;box-shadow:0 6px 24px #245de840;border:1px solid #ffffff50;display:flex;align-items:center;gap:9px;touch-action:none;user-select:none;cursor:grab;z-index:2147483646;font-weight:600}
 #shell{position:fixed;display:flex;flex-direction:column;background:#f6f8fc;border:1px solid #dbe3f0;border-radius:16px;z-index:2147483646;overflow:hidden;box-shadow:0 20px 70px #1e355b38;min-width:0}
 #titlebar{height:54px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 18px;background:white;border-bottom:1px solid #e8edf5;cursor:move;touch-action:none;user-select:none}#brand-icon{background:#245de8;color:white;border-radius:9px;padding:3px 8px;font-weight:800}#version{font-size:11px;color:#8290a6}#window-close,#detail-close{margin-left:auto;color:#dc3545;background:#fff1f2;border-radius:8px;width:30px;height:30px;line-height:30px;padding:0;font-size:15px}#window-close:hover,#detail-close:hover{background:#ffe1e5}
 #workspace{display:flex;flex:1;min-height:0}nav{width:166px;flex-shrink:0;padding:18px 10px;background:#fff;border-right:1px solid #e8edf5}nav small{display:block;color:#95a0b2;font-size:10px;letter-spacing:1.6px;margin:2px 12px 12px}nav button{display:block;width:100%;text-align:left;padding:11px 12px;margin:4px 0;background:transparent;color:#64738b;border-radius:9px;font-weight:500;white-space:nowrap}nav button:hover{background:#f4f7fc}nav button[aria-selected=true]{background:#eaf0ff;color:#245de8;font-weight:700;box-shadow:inset 3px 0 #245de8}
@@ -36,9 +36,14 @@ main{position:relative;isolation:isolate;flex:1;min-width:0;min-height:0;overflo
 #settings-view h2{font-size:21px;margin:0 0 6px}#settings-view p{color:#718098}#settings-view button{border:1px solid #dbe3f0;border-radius:7px;padding:7px 9px;white-space:nowrap;margin:5px 5px 5px 0;background:white;color:#425778}#settings-view [data-project-save]{background:#245de8;border-color:#245de8;color:white}#settings-view input:not([type=checkbox]),#settings-view textarea{border:1px solid #dce4f0;border-radius:6px;padding:8px;max-width:100%;background:#fbfcff}#settings-view td{padding:10px 6px;vertical-align:top;border-bottom:1px solid #edf1f7}#settings-view th{padding:10px 6px;text-align:left;font-size:11px;color:#718098;background:#f0f4fb}#settings-view table{table-layout:fixed}#settings-view th:first-child{width:90px}#settings-view th:nth-child(4){width:76px}#settings-view th:last-child{width:76px}#settings-view [data-auto-setting]{display:flex;align-items:center;gap:8px;padding:14px;background:#edf3ff;border-radius:10px;margin:16px 0;color:#245de8}
 `;root.append(style);
 function el(tag,text,parent=root){const n=document.createElement(tag);if(text)n.textContent=text;parent.append(n);return n;}
-const launcher=el('button','Jira Monitor');launcher.id='launcher';
+const launcher=el('button');launcher.id='launcher';launcher.title='点击打开 · 拖动移动位置';el('span','✦',launcher).style.cssText='font-size:19px;line-height:1';el('span','Jira Monitor',launcher);
+let launcherDragged=false;const savedLauncher=GM_getValue('jira-monitor-launcher-v1',null);
+function placeLauncher(point){const width=launcher.offsetWidth||132,height=launcher.offsetHeight||42;const left=Math.max(8,Math.min(point.left,innerWidth-width-8)),top=Math.max(8,Math.min(point.top,innerHeight-height-8));Object.assign(launcher.style,{left:left+'px',top:top+'px',right:'auto',bottom:'auto'});return {left,top};}
+if(savedLauncher)placeLauncher(savedLauncher);
+launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
+addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.1.0',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.2.0',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  超时预警',nav),sprintTab=el('button','▥  Sprint Analysis',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';config.id='nav-settings';
@@ -54,7 +59,7 @@ const hub={timeout,sprint,settings,detail:detailContent,autoDetail:GM_getValue('
  hide(){shell.hidden=true;launcher.focus();},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
  openDetail(){dismissedDetail='';hub.syncDetail();},setAuto(value){hub.autoDetail=value;GM_setValue('jira-monitor-auto-detail',value);if(value){dismissedDetail='';hub.startDetail?.();}else hub.stopDetail?.();hub.syncDetail();},
  refreshSettings(){hub.configure?.();}};
-launcher.onclick=()=>hub.show();timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
+launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
 root.addEventListener('keydown',e=>{if(e.key==='Escape')hub.hide();});
 if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
   function validateTeamsUrl(value){
@@ -103,11 +108,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.1.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.2.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.1.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.2.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -214,6 +219,8 @@ function initTimeout(detailOnly){
     const overlay=document.createElement('div');overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#0005;display:flex;align-items:center;justify-content:center';
     const shadow=overlay.attachShadow({mode:'open'}),box=document.createElement('div');box.style.cssText='background:white;color:#172b4d;padding:20px;border-radius:8px;width:760px;max-width:92vw;max-height:85vh;overflow:auto;font:14px Arial';shadow.append(box);
     const add=(tag,text,attr,parent=box)=>{const x=document.createElement(tag);if(text)x.textContent=text;if(attr)x.setAttribute(attr,'');parent.append(x);return x;};
+    box.style.position='relative';
+    const closeRule=add('button','❌','data-rule-close');closeRule.setAttribute('aria-label','关闭统计规则');closeRule.style.cssText='position:sticky;top:0;float:right;margin:0 0 10px 12px;color:#dc3545;background:#fff1f2;border:0;border-radius:8px;width:30px;height:30px;cursor:pointer;z-index:1';closeRule.onclick=()=>overlay.remove();
     add('b','统计规则设置');add('p','全项目共用；阈值单位为自然天，支持0.01天（14.4分钟）。下限≤天数＜上限：即将超期；天数≥上限：已超期。按本地周五时间：10:30前不提前，10:30起提前1天，17:00起提前2天。保存用于新扫描，已有结果及运行/暂停中的任务保留原规则。');
     const rows=[];
     function build(rule){
@@ -239,7 +246,7 @@ function initTimeout(detailOnly){
       if(rows.length!==DEFAULT_RULES.length){status.textContent='当前规则数量与默认配置不一致，请检查';return;}
       rows.forEach((fields,i)=>{for(const key of Object.keys(fields)){const value=DEFAULT_RULES[i][key];fields[key].value=Array.isArray(value)?value.join('\n'):String(value);}});status.textContent='已填入默认值，点击保存规则后生效';
     };
-    add('button','关闭').onclick=()=>overlay.remove();(document.body||document.documentElement).append(overlay);
+    (document.body||document.documentElement).append(overlay);
   }
   const norm=s=>String(s||'').replace(/[_\s-]+/g,' ').trim().toUpperCase();
   function validateRules(rules){
@@ -438,9 +445,10 @@ function initTimeout(detailOnly){
   try{const saved=typeof GM_getValue==='function'?GM_getValue(RULE_SETTING,null):null;if(saved!==null){validateRules(saved);CONFIG.rules=saved;}}catch(error){ruleLoadError='已保存规则无效，本次使用代码默认规则：'+safeError(error);}
   validateRules(CONFIG.rules);
   el('[data-config]').textContent=CONFIG.rules.map(r=>ruleText(r)).join('\n');
-  let busy=false, epoch=0;
+  let busy=false, epoch=0, shownBatch='';
   function render() {
     const s=get();
+    if(!detailOnly&&s?.mode==='batch'&&(s.active||s.paused)&&shownBatch!==s.id){shownBatch=s.id;hub.show('timeout');}
     if(detailOnly)hub.syncDetail();
     el('[data-teams-status]').textContent='按项目通知：已配置 '+projectConfigs().length+' 个项目'+(s?.mode==='single'?' · 详情仅手动发送':' · 自动通知遵循各项目开关');
     el('[data-config]').textContent=(s?.rules||CONFIG.rules).map(r=>ruleText(r)).join('\n');
@@ -896,7 +904,7 @@ function initTimeout(detailOnly){
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
   if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.1.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.2.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1086,7 +1094,7 @@ initTimeout();initTimeout(true);
   :host{all:initial;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b4d}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d;padding:7px 12px}button:hover{background:#edf3ff}.primary:hover,#launch:hover{background:#0747a6}#close{white-space:nowrap}button:disabled{opacity:.5;cursor:wait}.primary,#launch{background:#0052cc;color:white;border-color:#0052cc}#launch{position:fixed;right:24px;bottom:24px;z-index:2147483646;box-shadow:0 5px 20px #091e4240}#overlay{position:fixed;inset:0;background:#091e4260;z-index:2147483647;padding:3vh 3vw;display:none}#panel{background:#f7f9fc;border-radius:14px;max-width:1280px;margin:auto;height:94vh;overflow:auto;box-shadow:0 20px 80px #091e4255;padding:24px}header{display:flex;align-items:center;justify-content:space-between}h1{font-size:24px;margin:0}h2{font-size:17px;margin:0 0 12px}.muted{color:#5e6c84}p{margin:8px 0}.controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap;margin:18px 0}label{display:flex;flex-direction:column;gap:5px}input,select{border:1px solid #b3bfd0;border-radius:5px;padding:7px;background:white;color:#172b4d}fieldset{margin:0;border:1px solid #b3bfd0;border-radius:6px;padding:8px;background:white;min-width:280px;max-width:100%}.choices{height:140px;overflow:auto;max-width:430px}.choices label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:3px;cursor:pointer}.choices input{margin:0}.tools{display:flex;gap:8px;margin-bottom:5px}.tools button{padding:2px 8px}legend{padding:0 5px}.card{overflow-x:auto;background:white;border:1px solid #dfe5ed;border-radius:9px;margin:16px 0;padding:18px}.notice{padding:10px 14px;background:#eaf1ff;border-radius:6px}#message{white-space:pre-wrap}#message.error{background:#fff0ed;color:#ae2a19;padding:12px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid #e8ecf2;padding:9px 10px}th{background:#f4f6fa;color:#5e6c84}td button{border:0;padding:0;color:#0052cc;background:none;text-decoration:underline}.delta{font-variant-numeric:tabular-nums;font-weight:600}a{color:#0052cc}#detail{overflow:auto}small{font-size:12px}@media(max-width:650px){#panel{padding:14px}.controls{display:block}label{margin:10px 0}#sprints{min-width:0;width:100%}th,td{padding:6px}h1{font-size:20px}}
   </style><button id="launch">◷ Sprint Analysis v0.1.9</button><div id="overlay"><section id="panel" role="dialog" aria-modal="true" aria-label="Sprint Analysis"><header><div><h1>Sprint Analysis <small class="muted">v0.1.9</small></h1><p class="muted"><span id="period-description"></span> · Asia/Shanghai（UTC+08:00）</p></div><button id="close" aria-label="关闭">关闭</button></header>
   <div class="notice">口径：以本次查询匹配的成员回溯对比时点的状态；不还原历史 Sprint 成员或历史筛选条件。已关闭 Sprint 也可能保留在任务 Sprint 字段中；同一任务可出现在多个 Sprint，各 Sprint 不可直接相加。</div>
-  <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Sprint（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 12 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><label>推送项目<select id="notify-project"></select></label><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
+  <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Sprint（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 12 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><fieldset id="notify-box"><legend>推送项目（可多选）</legend><div id="notify-project" role="group" aria-label="推送项目（可多选）"></div></fieldset><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
   <p class="muted">统计当前页面查询的全部分页，不扩大到整个 Sprint。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。</p><p id="message" role="status">点击“载入当前页面”读取全部结果；本工具只读取 Jira，不修改任务。</p><div id="results"></div><div id="detail"></div></section></div>`;
   const teamsDialog=document.createElement('div');teamsDialog.id='teams-dialog';teamsDialog.setAttribute('role','dialog');teamsDialog.setAttribute('aria-modal','true');teamsDialog.style.cssText='display:none;position:fixed;inset:0;background:#091e4280;z-index:2147483647;padding:4vh 4vw;overflow:auto';
   const teamsBox=document.createElement('section');teamsBox.className='card';teamsBox.style.cssText='max-width:900px;margin:0 auto;padding:24px;max-height:90vh;overflow:auto';teamsDialog.append(teamsBox);root.append(teamsDialog);
@@ -1215,7 +1223,7 @@ initTimeout();initTimeout(true);
     reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜当前页面全部分页｜JQL：${jql}｜所选 Sprint：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯`;
     reportJiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql});
     reportIssues=scoped;reportIds=ids;reportStatuses=statusIds;reportNow=now;
-    groups=calculated;const picker=$('notify-project');picker.replaceChildren();for(const key of [...new Set(scoped.map(i=>i.key.split('-')[0].toUpperCase()))].sort()){const o=text('option',key,picker);o.value=key;}render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Sprint 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Sprint 分组。合计仅包含所选状态。`);
+    groups=calculated;const picker=$('notify-project');picker.replaceChildren();for(const key of [...new Set(scoped.map(i=>i.key.split('-')[0].toUpperCase()))].sort()){const label=text('label','',picker);const input=document.createElement('input');input.type='checkbox';input.value=key;input.checked=true;label.append(input,document.createTextNode(key));}render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Sprint 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Sprint 分组。合计仅包含所选状态。`);
   }
   let teamsSending=false,teamsFocus;
   function openTeams(title){
@@ -1226,65 +1234,70 @@ initTimeout();initTimeout(true);
   function teamsConfig(){hub.configure();}
   function teamsPreview(){
     if(busy||teamsSending||!groups.length)return;
-    const projectKey=$('notify-project').value;
-    const target=hub.target(projectKey+'-1');
-    if(!target?.webhook){message('请先在共享配置中设置所选项目的 Webhook。',true);teamsConfig();return;}
-    const config={url:target.webhook,name:projectKey};
-    const projectIssues=reportIssues.filter(i=>i.key.split('-')[0].toUpperCase()===projectKey);
-    if(!projectIssues.length){message('所选项目在本次分析中没有任务，请重新选择。',true);return;}
-
+    const keys=[...$('notify-project').querySelectorAll('input:checked')].map(input=>input.value);
+    if(!keys.length){message('请至少勾选一个推送项目。',true);return;}
     try{
-      const destination=validateTeamsUrl(config.url);
-      const report=buildTeamsReport(selectStatusGroups(aggregate(projectIssues,field,reportIds,activePeriod.cutoff,reportNow),reportStatuses),reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl);
-      const bodyText=projectKey+' · '+report.description+'\n'+reportMeta+'\n'+reportJiraUrl+'\n\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
-      const escape=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-      report.payload.projectKey=projectKey;report.payload.reportType='sprint-analysis';
-      report.payload.email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
-      const data=JSON.stringify(report.payload),bytes=new TextEncoder().encode(data).length;
-      if(new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024)throw new Error('报告超过 Teams 单条消息大小限制，请减少所选 Sprint 后重试；未发送。');
-      openTeams('Teams 推送预览');
-      text('p','目标项目：'+config.name+' · 邮件：'+(target.recipients?.join(';')||'未配置'),teamsBox);
-      // Keep the URL signature out of DOM preview and error messages.
-      text('p','Webhook 主机：'+new URL(destination).hostname+'（密钥已隐藏；目标名称由本地配置提供）',teamsBox);
-      text('p',`将发送当前报告的统计摘要、JQL 和 Jira 查询链接，共 ${bytes} 字节。不包含逐条任务标题、负责人或完整历史。以下为卡片内容预览（查询条件可展开查看）；实际排版随 Teams 客户端变化。`,teamsBox);
-      const preview=document.createElement('div');preview.id='teams-preview-content';preview.style.cssText='background:#f5f7fb;padding:16px;max-height:55vh;overflow:auto;border:1px solid #dfe5ed;border-radius:10px';teamsBox.append(preview);
-      text('h2','Sprint Analysis',preview).style.color='#0052cc';text('p',report.description,preview);text('p',report.generated,preview).className='muted';
-      for(const section of report.sections){
-        const card=document.createElement('section');card.className='card';preview.append(card);text('h2',section.name,card);text('small','Sprint #'+section.id,card).className='muted';
-        const summary=document.createElement('div');summary.style.cssText='display:flex;gap:24px;flex-wrap:wrap;margin:12px 0';card.append(summary);
-        for(const [label,value] of [['当前数量',section.rows.at(-1)[2]],['净状态变化',section.changes],[report.period.created,section.created]]){
-          const metric=document.createElement('div');summary.append(metric);text('strong',String(value),metric).style.cssText='display:block;font-size:24px;color:#0052cc';text('small',label,metric).className='muted';metric.style.textAlign='center';
+      // Freeze each project's report and destination before displaying the confirmation.
+      const deliveries=keys.map(projectKey=>{
+        const configured=hub.target(projectKey+'-1');
+        if(!configured?.webhook)throw Error(projectKey+' 未配置 Webhook，请先在配置中心保存。未发送任何消息。');
+        const target={...configured,recipients:[...(configured.recipients||[])]},destination=validateTeamsUrl(target.webhook);
+        const projectIssues=reportIssues.filter(i=>i.key.split('-')[0].toUpperCase()===projectKey);
+        if(!projectIssues.length)throw Error(projectKey+' 在本次报告中没有任务，请重新分析。');
+        const projectGroups=selectStatusGroups(aggregate(projectIssues,field,reportIds,activePeriod.cutoff,reportNow),reportStatuses);
+        const report=buildTeamsReport(projectGroups,reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl);
+        const bodyText=projectKey+' · '+report.description+'\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
+        report.payload.projectKey=projectKey;report.payload.reportType='sprint-analysis';
+        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
+        if(new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
+        return {projectKey,target,destination,report,data:JSON.stringify(report.payload)};
+      });
+      openTeams('项目推送预览 · '+deliveries.length+' 个项目');
+      text('p','每个项目使用配置中心对应的 Teams Webhook 和邮件收件人，分别发送。',teamsBox);
+      const preview=document.createElement('div');preview.id='teams-preview-content';teamsBox.append(preview);
+      for(const item of deliveries){
+        const card=text('section','',preview);card.className='card';
+        text('h2',item.projectKey+' · Sprint Analysis',card);
+        text('p','邮件：'+(item.target.recipients.join(';')||'未配置'),card);
+        text('p','Webhook 主机：'+new URL(item.destination).hostname+'（密钥已隐藏）',card).className='muted';
+        text('p',item.report.description,card);
+        for(const section of item.report.sections){
+          text('h3',section.name,card);const table=document.createElement('table');card.append(table);
+          const head=document.createElement('tr');table.append(head);item.report.heading.forEach(h=>text('th',h,head));
+          section.rows.forEach((values,index)=>{const tr=document.createElement('tr');table.append(tr);if(index===section.rows.length-1)tr.style.cssText='font-weight:700;background:#edf3ff';values.forEach((v,i)=>{const td=text('td',v,tr);if(i===3&&Number(v)>0)td.style.color='#d13438';});});
         }
-        const table=document.createElement('table');card.append(table);const head=document.createElement('tr');table.append(head);report.heading.forEach((h,j)=>{const th=text('th',h,head);th.style.textAlign=j?'center':'left';});
-        for(let i=0;i<section.rows.length;i++){const tr=document.createElement('tr');table.append(tr);if(i===section.rows.length-1)tr.style.cssText='font-weight:700;background:#eaf1ff';section.rows[i].forEach((v,j)=>{const td=text('td',v,tr);td.style.textAlign=j?'center':'left';td.style.borderBottom='1px solid #d0d8e5';if(j)td.style.whiteSpace='nowrap';if(j===3&&Number(v)>0)td.style.color='#d13438';});}
       }
-      text('p','当前成员回溯 · 仅统计所选状态 · 数量增减不代表好坏',preview).className='muted';
-      const details=document.createElement('details');preview.append(details);text('summary','统计口径与查询条件',details);text('p',report.meta,details).style.overflowWrap='anywhere';
-      const link=text('a','打开 Jira 查询',preview);link.href=report.jiraUrl;link.target='_blank';link.rel='noopener noreferrer';
-      const status=text('p','尚未发送。确认预览后点击下方按钮。',teamsBox);status.id='teams-send-status';status.setAttribute('role','status');
+      const status=text('p','尚未发送。确认后按项目分别提交；不会自动重试。',teamsBox);status.id='teams-send-status';status.setAttribute('role','status');
       const cancel=teamsButton('teams-preview-cancel','取消',closeTeams);
-      const send=teamsButton('teams-send','确认推送',()=>{
+      const send=teamsButton('teams-send','确认推送 '+deliveries.length+' 个项目',async()=>{
         if(teamsSending||send.disabled)return;
-        if(typeof GM_xmlhttpRequest!=='function'){status.textContent='缺少油猴跨域请求权限，请更新安装脚本并确认权限。';return;}
-        teamsSending=true;send.disabled=true;cancel.disabled=true;status.textContent='正在提交到 Teams Workflows…';
-        let settled=false,request;
-        const finish=message=>{if(settled)return;settled=true;clearTimeout(watchdog);teamsSending=false;cancel.disabled=false;status.textContent=message;};
-        const watchdog=setTimeout(()=>{finish('请求超时，投递结果未知。请先查看 Teams / 工作流运行记录，避免重复发送。');request?.abort?.();},30000);
-        // One explicit POST only; do not auto-retry a possibly delivered message.
-        try{request=GM_xmlhttpRequest({method:'POST',url:destination,headers:{'Content-Type':'application/json'},data,timeout:30000,anonymous:true,redirect:'error',
-          onload:r=>{if(r.status>=200&&r.status<300)finish('Webhook 已接受请求（HTTP '+r.status+'）。请在 Teams 或工作流运行记录中确认投递；HTTP 成功不代表卡片已发布。');
-            else finish('Teams Webhook 返回：'+teamsResponseInfo(r)+'；请检查工作流地址、认证方式及运行记录。未自动重试。');},
-          onerror:r=>finish('提交失败：'+teamsResponseInfo(r)+'。请先用 Teams 配置中的 HEAD 连接诊断区分跨域权限/网络问题与 HTTP 错误。更新后需接受微软域名连接权限；投递结果可能未知，未自动重试。'),
-          ontimeout:()=>finish('请求超时，投递结果未知。请先查看 Teams / 工作流运行记录，避免重复发送。'),
-          onabort:()=>finish('请求已中止，投递结果未知。请先检查 Teams。')});}
-        catch(e){finish('无法提交请求：'+teamsResponseInfo(e)+'。请检查油猴权限。未自动重试。');}
+        if(typeof GM_xmlhttpRequest!=='function'){status.textContent='缺少油猴跨域请求权限，请更新脚本。';return;}
+        teamsSending=true;send.disabled=true;cancel.disabled=true;
+        const outcomes=[];
+        for(const item of deliveries){
+          status.textContent=[...outcomes,item.projectKey+'：正在提交…'].join('\n');
+          const outcome=await new Promise(resolve=>{
+            let settled=false,request;
+            const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value);};
+            const timer=setTimeout(()=>{finish('超时，结果未知，请检查工作流；未重试');request?.abort?.();},30000);
+            try{request=GM_xmlhttpRequest({method:'POST',url:item.destination,headers:{'Content-Type':'application/json'},data:item.data,timeout:30000,anonymous:true,redirect:'error',
+              onload:r=>finish(r.status>=200&&r.status<300?'已提交（HTTP '+r.status+'），最终投递请查工作流':'失败：'+teamsResponseInfo(r)),
+              onerror:r=>finish('网络失败，结果可能未知：'+teamsResponseInfo(r)+'；未重试'),
+              ontimeout:()=>finish('超时，结果未知，请检查工作流；未重试'),onabort:()=>finish('已中止，结果未知；未重试')});}
+            catch(error){finish('请求未发出：'+teamsResponseInfo(error));}
+          });
+          outcomes.push(item.projectKey+'：'+outcome);
+        }
+        teamsSending=false;cancel.disabled=false;cancel.textContent='关闭';status.style.whiteSpace='pre-wrap';status.textContent=outcomes.join('\n');
       });send.className='primary';cancel.focus();
-    }catch(e){message(e.message,true);}
+    }catch(error){message(error.message,true);}
   }
   $('teams-preview').onclick=teamsPreview;
 
   $('load').onclick=()=>guard(load);$('run').onclick=()=>guard(run);
   let lastFocus;
+  const toolbar=document.createElement('div');toolbar.className='query-toolbar';const controls=root.querySelector('.controls');controls.before(toolbar);toolbar.append($('period').parentElement,$('load'));
+  const compact=document.createElement('style');compact.textContent='.query-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:16px 0}.query-toolbar label{width:240px;max-width:100%}.query-toolbar #load{width:auto;min-width:0;padding:8px 14px}.controls{align-items:start}#notify-box{grid-column:1/-1;padding:8px 12px}#notify-project{display:flex;gap:8px;flex-wrap:wrap;padding:4px 0}#notify-project label{display:inline-flex;flex-direction:row;align-items:center;gap:6px;background:#fff;border:1px solid #dce4f1;border-radius:7px;padding:7px 12px;cursor:pointer}#notify-project input{margin:0}.controls>#run,.controls>#export,.controls>#teams-preview{width:max-content;max-width:100%}.query-toolbar select{width:100%}';root.append(compact);
   $('launch').style.display='none';$('close').style.display='none';
   const embeddedStyle=document.createElement('style');embeddedStyle.textContent='#overlay{display:block!important;position:relative;inset:auto;padding:0;background:none;z-index:auto}#panel{height:auto;min-height:0;max-width:none;margin:0;padding:2px;background:transparent;box-shadow:none;border-radius:0}header{margin-bottom:12px}h1{font-size:21px}h1 small{display:none}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}fieldset{min-width:0;max-width:none;width:100%;background:#fff;border-color:#dce4f1;padding:12px}.choices{max-width:none;height:150px}.choices label{font-size:12px}label{font-size:12px;color:#718098}button{border-color:#dbe3f0;border-radius:7px;font-size:12px;padding:8px 10px}.primary{background:#245de8;border-color:#245de8}.notice{font-size:11px;line-height:1.7;color:#718098;background:#edf3ff;padding:10px 12px}#load{align-self:end}#message{font-size:12px}.card{border-color:#e1e7f1;padding:14px;border-radius:10px}p.muted{font-size:11px}#status-all{align-self:start}';root.append(embeddedStyle);
   $('launch').onclick=()=>{lastFocus=document.activeElement;$('overlay').style.display='block';$('close').focus();};
