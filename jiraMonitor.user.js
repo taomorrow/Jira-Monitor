@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.8.0
+// @version      6.8.1
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -43,7 +43,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.8.0',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.8.1',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
@@ -161,11 +161,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.8.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.8.1 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.8.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.8.1 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -1111,7 +1111,7 @@ function initTimeout(detailOnly){
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
   if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.8.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.8.1 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1615,7 +1615,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     }).filter(g=>[...g.rows.values()].some(r=>r.before.length||r.after.length));
   }
   // Epic membership uses the current Epic Link (or parent on newer Jira instances).
-  const epicNames=new Map(),validEpics=new Set();let epicDiscoveryNote='',emptyEpics=[];
+  const epicNames=new Map();
   function isEpic(issue){const type=issue.fields?.issuetype;return type?.subtask!==true&&(/^epic$|^史诗$/i.test(type?.name||'')||type?.hierarchyLevel===1);}
   function isStory(issue){return /^(story|用户故事|故事)$/i.test(String(issue.fields?.issuetype?.name||'').trim())&&issue.fields?.issuetype?.subtask!==true;}
   function sprints(value){
@@ -1627,25 +1627,17 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
       return {id:key,name:epicNames.get(key)||key,state:''};
     });
   }
-  function discoverEpics(issue){return isEpic(issue)?[{id:issue.key,name:epicNames.get(issue.key)||issue.key,state:''}]:issue.fields?.issuetype?.subtask?[]:sprints(issue.fields[field]);}
-  function epicSingleQuery(id){const selector=field==='parent'?'parent':'"'+epicClause.replace(/[\\"]/g,'\\$&')+'"';return selector+' = "'+id+'"';}
-  function epicMemberQuery(ids){return ids.map(id=>'('+epicSingleQuery(id)+')').join(' OR ');}
   async function loadEpicNames(issues){
-    validEpics.clear();epicNames.clear();epicDiscoveryNote='';
-    const keys=[...new Set(issues.flatMap(i=>discoverEpics(i).map(x=>x.id)))];
-    const record=issue=>{if(isEpic(issue)){validEpics.add(issue.key);epicNames.set(issue.key,issue.key+' · '+(issue.fields.summary||''));}};
-    // An arbitrary parent key is a candidate, never proof that its issue is an Epic.
-    issues.forEach(record);
+    epicNames.clear();
+    const keys=[...new Set(issues.filter(isStory).flatMap(i=>sprints(i.fields[field]).map(x=>x.id)))];
+    // Fetch labels only: these responses never contribute members or counts.
     for(let offset=0;offset<keys.length;offset+=50){
-      const subset=keys.slice(offset,offset+50);let start=0,total;
-      do{
-        const params=new URLSearchParams({jql:'key in ('+subset.join(',')+')',fields:'summary,issuetype',startAt:String(start),maxResults:'50'}),data=await api('/rest/api/2/search?'+params);
-        if(!Array.isArray(data.issues)||!Number.isInteger(data.total)||data.total<0||(data.startAt!==undefined&&data.startAt!==start)||(total!==undefined&&total!==data.total)||(!data.issues.length&&start<data.total))throw Error('Epic 类型校验分页不完整，请重新载入。');
-        total=data.total;data.issues.forEach(record);start+=data.issues.length;
-      }while(start<total);
+      try{
+        const params=new URLSearchParams({jql:'key in ('+keys.slice(offset,offset+50).join(',')+')',fields:'summary,issuetype',maxResults:'50'});
+        const data=await api('/rest/api/2/search?'+params);
+        for(const issue of data.issues||[])if(isEpic(issue)&&keys.includes(issue.key))epicNames.set(issue.key,issue.key+' · '+(issue.fields.summary||''));
+      }catch{ /* A missing label must not block grouping the current Stories by key. */ }
     }
-    const skipped=keys.filter(key=>!validEpics.has(key));
-    if(skipped.length)epicDiscoveryNote='；已排除 '+skipped.length+' 个非 Epic 或不可见候选：'+skipped.join('、');
   }
   function statusAt(issue, cutoff, inclusive = true) {
     const created = Date.parse(issue.fields.created);
@@ -1788,9 +1780,9 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
   root.innerHTML=`<style>
   :host{all:initial;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b4d}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d;padding:7px 12px}button:hover{background:#edf3ff}.primary:hover,#launch:hover{background:#0747a6}#close{white-space:nowrap}button:disabled{opacity:.5;cursor:wait}.primary,#launch{background:#0052cc;color:white;border-color:#0052cc}#launch{position:fixed;right:24px;bottom:24px;z-index:2147483646;box-shadow:0 5px 20px #091e4240}#overlay{position:fixed;inset:0;background:#091e4260;z-index:2147483647;padding:3vh 3vw;display:none}#panel{background:#f7f9fc;border-radius:14px;max-width:1280px;margin:auto;height:94vh;overflow:auto;box-shadow:0 20px 80px #091e4255;padding:24px}header{display:flex;align-items:center;justify-content:space-between}h1{font-size:24px;margin:0}h2{font-size:17px;margin:0 0 12px}.muted{color:#5e6c84}p{margin:8px 0}.controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap;margin:18px 0}label{display:flex;flex-direction:column;gap:5px}input,select{border:1px solid #b3bfd0;border-radius:5px;padding:7px;background:white;color:#172b4d}fieldset{margin:0;border:1px solid #b3bfd0;border-radius:6px;padding:8px;background:white;min-width:280px;max-width:100%}.choices{height:140px;overflow:auto;max-width:430px}.choices label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:3px;cursor:pointer}.choices input{margin:0}.tools{display:flex;gap:8px;margin-bottom:5px}.tools button{padding:2px 8px}legend{padding:0 5px}.card{overflow-x:auto;background:white;border:1px solid #dfe5ed;border-radius:9px;margin:16px 0;padding:18px}.notice{padding:10px 14px;background:#eaf1ff;border-radius:6px}#message{white-space:pre-wrap}#message.error{background:#fff0ed;color:#ae2a19;padding:12px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid #e8ecf2;padding:9px 10px}th{background:#f4f6fa;color:#5e6c84}td button{border:0;padding:0;color:#0052cc;background:none;text-decoration:underline}.delta{font-variant-numeric:tabular-nums;font-weight:600}a{color:#0052cc}#detail{overflow:auto}small{font-size:12px}@media(max-width:650px){#panel{padding:14px}.controls{display:block}label{margin:10px 0}#sprints{min-width:0;width:100%}th,td{padding:6px}h1{font-size:20px}}
   </style><button id="launch">◷ Epic Analysis v0.1.9</button><div id="overlay"><section id="panel" role="dialog" aria-modal="true" aria-label="Epic Analysis"><header><div><h1>Epic <small class="muted">v0.1.9</small></h1><p class="muted"><span id="period-description"></span> · Asia/Shanghai（UTC+08:00）</p></div><button id="close" aria-label="关闭">关闭</button></header>
-  <div class="notice">口径：当前查询用于发现 Epic；分析所选 Epic 下全部 Story，不受列表其他筛选条件限制。不包含 Bug、Task、Subtask，不还原历史 Epic 归属。对比两侧均为 0 的状态行及空 Epic 自动隐藏。</div>
+  <div class="notice">口径：仅统计当前查询全部分页中的 Story，按当前 Epic 归属分组；不会查询 Epic 下的其他 Story。不包含 Bug、Task、Subtask，不还原历史 Epic 归属。对比两侧均为 0 的状态行及空 Epic 自动隐藏。</div>
   <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Epic（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 14 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><button id="report-export" disabled>导出交互报告</button><label class="report-option"><input id="attach-report" type="checkbox" checked>邮件附交互报告（含 Jira 明细）</label><fieldset id="notify-box"><legend>通知项目（工单所属项目，可多选）</legend><div id="notify-project" role="group" aria-label="推送项目（可多选）"></div></fieldset><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
-  <p class="muted">从当前查询发现 Epic，再统计所选 Epic 下全部 Story；数量按你的 Jira 可见权限计算。</p><p id="message" role="status">点击“载入当前页面”读取全部结果；统计所选 Epic 下全部 Story；按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。</p><div id="results"></div><div id="detail"></div></section></div>`;
+  <p class="muted">仅统计当前查询全部分页中的 Story，按 Epic 分组，不追溯其他 Story。修改 Jira 搜索条件后请重新载入。</p><p id="message" role="status">点击“载入当前页面”读取全部结果；仅统计当前查询中的 Story，按 Epic 分组；按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。</p><div id="results"></div><div id="detail"></div></section></div>`;
   const teamsDialog=document.createElement('div');teamsDialog.id='teams-dialog';teamsDialog.setAttribute('role','dialog');teamsDialog.setAttribute('aria-modal','true');teamsDialog.style.cssText='display:none;position:fixed;inset:0;background:#091e4280;z-index:2147483647;padding:4vh 4vw;overflow:auto';
   const teamsBox=document.createElement('section');teamsBox.className='card';teamsBox.style.cssText='max-width:900px;margin:0 auto;padding:24px;max-height:90vh;overflow:auto';teamsDialog.append(teamsBox);root.append(teamsDialog);
   const $=id=>root.getElementById(id); let reportIssues=[], reportIds=[], reportStatuses=null, reportNow=0; let field, groups=[], busy=false, reportMeta='', loadedQuery='', reportJiraUrl='', activePeriod=comparisonPeriod(Date.now());
@@ -1808,36 +1800,6 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
       if(!res.headers.get('content-type')?.includes('application/json'))throw Error('Jira 返回登录页或非 JSON 内容，请先登录后重试。');
       return await res.json();
     }finally{clearTimeout(timeout);}
-  }
-  async function epicMembers(ids){
-    emptyEpics=[];let reverseMembers;const all=[],globalKeys=new Set();
-    for(const id of ids){
-      let start=0,total,mode='agile';const seen=new Set();
-      do{
-        const fields=['summary','status','created','updated','issuetype','parent',field];let page;
-        const fallback=()=>api('/rest/api/2/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jql:epicSingleQuery(id),fields,startAt:start,maxResults:50})});
-        try{page=mode==='agile'?await api('/rest/agile/1.0/epic/'+encodeURIComponent(id)+'/issue?'+new URLSearchParams({startAt:String(start),maxResults:'50',fields:fields.join(',')})):await fallback();}
-        catch(error){
-          if(mode!=='agile'||![400,404,405,501].includes(error.status))throw Error(id+'：'+error.message);
-          mode='search';try{page=await fallback();}catch(failure){
-            // Epic equality can fail even for a real Epic. Read the association field instead; never infer zero from an HTTP error.
-            if(start===0&&seen.size===0&&validEpics.has(id)&&failure.status===400&&failure.message.includes("No issues have a parent epic with key or name '"+id+"'")){
-              const current=await api('/rest/api/2/issue/'+encodeURIComponent(id)+'?fields=summary,issuetype');
-              if(!isEpic(current))throw Error(id+' 当前不是 Epic，请重新载入候选列表。');
-              if(!reverseMembers){message('Epic 精确查询不可用，正在分页核对 Jira 关联字段…');reverseMembers=await search((field==='parent'?'parent':'"'+epicClause.replace(/[\\"]/g,'\\$&')+'"')+' IS NOT EMPTY');}
-              const members=reverseMembers.filter(issue=>sprints(issue.fields[field]).some(epic=>epic.id===id));
-              if(!members.length)emptyEpics.push(id);page={total:members.length,startAt:0,issues:members};
-            }else throw Error(id+'：Epic 成员接口不可用，兼容查询也失败。'+failure.message);
-          }
-        }
-        if(!Array.isArray(page.issues)||!Number.isInteger(page.total)||page.total<0)throw Error(id+'：Epic 成员分页格式无效，未生成报告。');
-        if((page.startAt!==undefined&&page.startAt!==start)||(total!==undefined&&total!==page.total)||(!page.issues.length&&start<page.total))throw Error(id+'：Epic 分页发生变化或提前结束，请重新分析。');
-        total=page.total;
-        for(const issue of page.issues){if(!issue.key||seen.has(issue.key)||globalKeys.has(issue.key))throw Error(id+'：Epic 成员重复或归属发生变化，请重试。');seen.add(issue.key);globalKeys.add(issue.key);all.push(issue);}
-        start+=page.issues.length;message('读取 Epic '+id+'：'+start+' / '+total+' 条关联工单…');
-      }while(start<total);
-    }
-    return all;
   }
   async function currentQuery(){
     const query=pageQuery(document,location.href);
@@ -1924,9 +1886,9 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
   for(const [id,checked] of [['sprint-all',true],['sprint-none',false]])$(id).onclick=()=>{for(const x of $('sprints').querySelectorAll('input'))x.checked=checked;invalidate();};
   async function load(){
     loadedQuery='';$('notify-project').replaceChildren();$('sprints').replaceChildren();
-    await detectField();const query=await currentQuery(), issues=await search(query), map=new Map();
+    await detectField();const query=await currentQuery(), issues=(await search(query)).filter(isStory), map=new Map();
     await loadEpicNames(issues);
-    for(const i of issues){const list=discoverEpics(i).filter(x=>validEpics.has(x.id));for(const s of list)map.set(s.id,s);}
+    for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:'未分配 Epic',state:''});for(const s of list)map.set(s.id,s);}
     $('sprints').replaceChildren();
     const options=[...map.values()].sort((a,b)=>(/active/i.test(b.state)?1:0)-(/active/i.test(a.state)?1:0)||b.name.localeCompare(a.name));
     for(const s of options)choice($('sprints'),s.id,`${s.name}${s.state?' · '+s.state:''} [${s.id}]`,true);
@@ -1934,7 +1896,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     $('statuses').replaceChildren();$('status-all').checked=true;
     for(const name of STATUS_NAMES)choice($('statuses'),normalized(name),name,false);
     loadedQuery=query;
-    message(`已读取当前页面全部 ${issues.length} 条任务、${options.length} 个 Epic 分组。可多选后分析。${epicDiscoveryNote}\nJQL：${loadedQuery}${issues.length?'':'（当前页面没有可见任务）'}`);
+    message(`已读取当前页面全部 ${issues.length} 条 Story、${options.length} 个 Epic 分组。可多选后分析。\nJQL：${loadedQuery}${issues.length?'':'（当前页面没有可见任务）'}`);
   }
   function details(title,items){hub.showIssueDetails(title,items,activePeriod); }
   function render(){
@@ -1955,17 +1917,17 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     if(jql!==loadedQuery)throw new Error('当前页面查询已改变，请重新“载入当前页面”后再分析。');
     const now=Date.now();activePeriod=comparisonPeriod(now,$('period').value);const cutoff=activePeriod.cutoff;
     $('period-description').textContent=activePeriod.description;
-    const epicQuery=epicMemberQuery(ids);const pageIssues=await epicMembers(ids), issues=pageIssues.filter(i=>isStory(i)&&matchesEpic(i,field,ids)), full=new Array(issues.length);let cursor=0,done=0,failed;
+    const pageIssues=await search(jql), issues=pageIssues.filter(i=>isStory(i)&&matchesEpic(i,field,ids)), full=new Array(issues.length);let cursor=0,done=0,failed;
     await Promise.all(Array.from({length:Math.min(3,issues.length)},async()=>{while(cursor<issues.length&&!failed){const i=cursor++;try{full[i]=await history(issues[i]);message(`读取完整历史 ${++done} / ${issues.length}…`);}catch(e){failed=e;}}}));
     if(failed)throw failed;
     const scoped=full.filter(i=>isStory(i)&&matchesEpic(i,field,ids));
     const allGroups=aggregate(scoped,field,ids,cutoff,now);
     const calculated=selectStatusGroups(allGroups,statusIds);
     const stateNames=statusIds===null?'全部指定的 14 个状态':[...$('statuses').querySelectorAll('input:checked')].map(x=>x.parentElement.textContent).join('、');
-    reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜所选 Epic 全部 Story｜JQL：${epicQuery}｜所选 Epic：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯${emptyEpics.length?'｜Jira 未找到关联成员，按 0 条处理：'+emptyEpics.join('、'):''}`;
-    reportJiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql:epicQuery});
+    reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜当前页面全部分页｜JQL：${jql}｜所选 Epic：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯`;
+    reportJiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql});
     reportIssues=scoped;reportIds=ids;reportStatuses=statusIds;reportNow=now;
-    groups=calculated;renderNotifyProjects();render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Epic 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Epic 分组。合计仅包含所选状态。${emptyEpics.length?' Jira 未找到关联成员，按 0 条处理：'+emptyEpics.join('、'):''}`);
+    groups=calculated;renderNotifyProjects();render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Epic 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Epic 分组。合计仅包含所选状态。`);
   }
 // Self-contained snapshot: no Jira API, authentication tokens, or external assets.
 function buildInteractiveReport(model){

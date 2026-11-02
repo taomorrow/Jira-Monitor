@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.8.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.8.1').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.8.0')
+t=t[t.index('(function ()'):].replace('5.5.4','6.8.1')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -78,7 +78,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.8.0',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.8.1',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -207,23 +207,20 @@ a=epic.index('  async function api(');b=epic.index('  async function currentQuer
 epic=epic[:a]+(root/'src/epic-api.js').read_text()+epic[b:]
 epic=epic.replace('<h1>Epic Analysis', '<h1>Epic').replace("g.name+' · '+g.id,card", "g.name,card")
 a=epic.index('<div class="notice">');b=epic.index('</div>',a)
-epic=epic[:a]+'<div class="notice">口径：当前查询用于发现 Epic；分析所选 Epic 下全部 Story，不受列表其他筛选条件限制。不包含 Bug、Task、Subtask，不还原历史 Epic 归属。对比两侧均为 0 的状态行及空 Epic 自动隐藏。</div>'+epic[b+6:]
+epic=epic[:a]+'<div class="notice">口径：仅统计当前查询全部分页中的 Story，按当前 Epic 归属分组；不会查询 Epic 下的其他 Story。不包含 Bug、Task、Subtask，不还原历史 Epic 归属。对比两侧均为 0 的状态行及空 Epic 自动隐藏。</div>'+epic[b+6:]
 epic=epic.replace('summary,status,created,updated,${field}', 'summary,status,created,updated,issuetype,parent,${field}')
 
-epic=epic.replace('for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:\'未分配 Epic\',state:\'\'});', 'await loadEpicNames(issues);\n    for(const i of issues){const list=discoverEpics(i).filter(x=>validEpics.has(x.id));')
+epic=epic.replace('const query=await currentQuery(), issues=await search(query), map=new Map();', 'const query=await currentQuery(), issues=(await search(query)).filter(isStory), map=new Map();')
+epic=epic.replace('for(const i of issues){const list=sprints(i.fields[field]);', 'await loadEpicNames(issues);\n    for(const i of issues){const list=sprints(i.fields[field]);')
 epic=epic.replace("/^active$/i.test(s.state)", 'true')
-epic=epic.replace('可多选后分析。', '可多选后分析。${epicDiscoveryNote}')
-epic=epic.replace('｜当前成员回溯`', "｜当前成员回溯${emptyEpics.length?'｜Jira 未找到关联成员，按 0 条处理：'+emptyEpics.join('、'):''}`")
-epic=epic.replace('合计仅包含所选状态。`', "合计仅包含所选状态。${emptyEpics.length?' Jira 未找到关联成员，按 0 条处理：'+emptyEpics.join('、'):''}`")
+epic=epic.replace('${issues.length} 条任务', '${issues.length} 条 Story')
 epic=epic.replace('const scoped=full.filter(i=>matchesEpic(i,field,ids));', 'const scoped=full.filter(i=>isStory(i)&&matchesEpic(i,field,ids));')
-epic=epic.replace('const pageIssues=await search(jql), issues=pageIssues.filter(i=>matchesEpic(i,field,ids))', 'const epicQuery=epicMemberQuery(ids);const pageIssues=await epicMembers(ids), issues=pageIssues.filter(i=>isStory(i)&&matchesEpic(i,field,ids))')
-epic=epic.replace("JQL：${jql}｜所选 Epic", "JQL：${epicQuery}｜所选 Epic").replace("new URLSearchParams({jql});", "new URLSearchParams({jql:epicQuery});")
+epic=epic.replace('const pageIssues=await search(jql), issues=pageIssues.filter(i=>matchesEpic(i,field,ids))', 'const pageIssues=await search(jql), issues=pageIssues.filter(i=>isStory(i)&&matchesEpic(i,field,ids))')
 a=epic.index('  function selectStatusGroups(');b=epic.index('  function ',a+12)
 selection=epic[a:b];end=selection.rfind('});');assert end>=0
 epic=epic[:a]+selection[:end]+'}).filter(g=>[...g.rows.values()].some(r=>r.before.length||r.after.length));'+selection[end+3:]+epic[b:]
 epic=epic.replace('const rows=[...g.rows.values()].sort(', 'const rows=[...g.rows.values()].filter(r=>r.before.length||r.after.length).sort(')
-epic=epic.replace('本工具只读取 Jira，不修改任务。', '统计所选 Epic 下全部 Story；按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。')
-epic=epic.replace('统计当前页面查询的全部分页，不扩大到整个 Epic。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。','从当前查询发现 Epic，再统计所选 Epic 下全部 Story；数量按你的 Jira 可见权限计算。')
-epic=epic.replace('当前页面全部分页｜JQL：${epicQuery}', '所选 Epic 全部 Story｜JQL：${epicQuery}')
+epic=epic.replace('本工具只读取 Jira，不修改任务。', '仅统计当前查询中的 Story，按 Epic 分组；按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。')
+epic=epic.replace('统计当前页面查询的全部分页，不扩大到整个 Epic。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。','仅统计当前查询全部分页中的 Story，按 Epic 分组，不追溯其他 Story。修改 Jira 搜索条件后请重新载入。')
 s=s.replace('<h1>Sprint Analysis', '<h1>Sprint')
 (root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n'+epic+'\n})();\n')
