@@ -33,6 +33,7 @@ test('mixed project Sprint reports route only selected project totals and shared
  const root=f.hub.querySelector('#jsa-host').shadowRoot;
  async function click(id){root.getElementById(id).click();for(let i=0;i<100&&root.getElementById('run').disabled;i++)await new Promise(r=>setTimeout(r,1));}
  await click('load');await click('run');assert.match(root.getElementById('message').textContent,/分析完成/);
+ root.querySelector('#results td button').click();assert.ok(w.document.getElementById('jira-monitor-issue-details'));assert.equal(root.getElementById('detail').childElementCount,0);w.document.getElementById('jira-monitor-issue-details').shadowRoot.querySelector('button').click();
  assert.equal(root.getElementById('notify-project').querySelectorAll('input').length,2);
  for(const input of root.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='CSP';
  root.getElementById('notify-project').querySelector('input[value="CSP"]').checked=true;await click('teams-preview');assert.equal(f.requests.length,0);assert.ok(root.getElementById('teams-preview-content'),root.getElementById('message').textContent);assert.match(root.getElementById('teams-preview-content').textContent,/Shared Sprint/);
@@ -133,7 +134,7 @@ test('current page and Dashboard scan extracted Jira keys directly without searc
  const root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;root.querySelector('[data-scope]').value='page';root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done');assert.equal(job(f).results.length,1);assert.equal(calls.length,1);assert.equal(f.w.location.pathname,dashboard?'/secure/Dashboard.jspa':'/issues/');f.dom.window.close();
  }
 });
-function alertState(){const now=Date.now(),rules=[{name:'DEV',minDays:2,maxDays:3,currentStatuses:['In Progress'],startStatus:'In Progress',forbiddenAfterStart:[]}];const item=(key,days)=>({key,summary:'Summary '+key,assignee:'Demo',assigneeEmail:'demo@example.com',currentStatus:'In Progress',checkedAt:now,rules:[{name:'DEV',seconds:days*86400,checkedAt:now,effectiveMinDays:2,effectiveMaxDays:3}]});return {id:'summary',mode:'batch',apiScan:true,active:false,paused:false,phase:'done',rules,queue:[],index:4,results:[item('CSP-1',2.5),item('CSP-2',4),item('CSP-3',1),item('OSPIT-4',3)]};}
+function alertState(){const now=Date.now(),rules=[{name:'DEV',minDays:2,maxDays:3,currentStatuses:['In Progress'],startStatus:'In Progress',forbiddenAfterStart:[]}];const item=(key,days)=>({key,summary:'Summary '+key,assignee:'Demo',assigneeEmail:'demo@example.com',devAssignees:[{name:'Dev Demo',email:'dev@example.com',account:'dev'}],currentStatus:'In Progress',checkedAt:now,rules:[{name:'DEV',seconds:days*86400,checkedAt:now,effectiveMinDays:2,effectiveMaxDays:3}]});return {id:'summary',mode:'batch',apiScan:true,active:false,paused:false,phase:'done',rules,queue:[],index:4,results:[item('CSP-1',2.5),item('CSP-2',4),item('CSP-3',1),item('OSPIT-4',3)]};}
 test('manual timeout sends one list per project, includes alerts only and keeps separate mail recipients',async()=>{
  const state=alertState(),f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}});
  f.store.get('jira-monitor-projects-v1').push({projectKey:'OSPIT',webhook:'https://other.logic.azure.com/workflows/osp',recipients:['osp@example.com']});
@@ -194,8 +195,8 @@ test('Epic groups only Stories, drills down changes, sends separate project repo
  w.HTMLElement.prototype.scrollIntoView=()=>{};
  const s=f.hub.querySelector('#jea-host').shadowRoot;
  for(const id of ['load','run']){s.getElementById(id).click();await until(()=>!s.getElementById('run').disabled);}
- assert.match(s.getElementById('message').textContent,/分析完成/);assert.equal(s.getElementById('sprints').querySelectorAll('input:checked').length,3);assert.match(s.getElementById('results').textContent,/Epic CSP-100/);assert.ok(!historyKeys.includes('CSP-3'));assert.equal(historyKeys.length,4);
- const count=[...s.getElementById('results').querySelectorAll('td button')].find(b=>b.textContent==='2');assert.ok(count);count.click();assert.equal(s.getElementById('detail').querySelectorAll('a').length,2);
+ assert.match(s.getElementById('message').textContent,/分析完成/);assert.equal(s.getElementById('sprints').querySelectorAll('input:checked').length,2);assert.match(s.getElementById('results').textContent,/Epic CSP-100/);assert.ok(!historyKeys.includes('CSP-3'));assert.equal(historyKeys.length,3);
+ const count=[...s.getElementById('results').querySelectorAll('td button')].find(b=>b.textContent==='2');assert.ok(count);count.click();assert.equal(w.document.getElementById('jira-monitor-issue-details').shadowRoot.querySelectorAll('a').length,2);assert.equal(s.getElementById('detail').childElementCount,0);
  for(const input of s.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='CSP';s.getElementById('teams-preview').click();assert.ok(s.getElementById('teams-send'),s.getElementById('message').textContent);s.getElementById('teams-send').click();assert.equal(f.requests.length,1);
  const payload=JSON.parse(f.requests[0].data);assert.equal(payload.reportType,'epic-analysis');assert.match(payload.email.subject,/Epic Analysis/);assert.match(payload.email.bodyText,/CSP-100/);assert.ok(payload.email.attachments.length);const report=Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString();assert.match(report,/CSP-1/);assert.doesNotMatch(report,/OSPIT-1|CSP-3/);
  f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));assert.equal(w.location.pathname,'/issues/');assert.equal(f.errors.length,0);f.dom.window.close();
@@ -210,4 +211,45 @@ test('disabled projects retain COE results but skip both manual and automatic no
  else{root.querySelector('[data-teams]').click();await until(()=>!root.querySelector('[data-start]').disabled);assert.equal(job(f).results.length,4);}
  assert.equal(f.requests.length,0);f.dom.window.close();
  }
+});
+
+test('Epic discovers Epic issues and counts all their Stories beyond the current query, omitting zero rows everywhere',async()=>{
+ const f=boot(),w=f.w,queries=[];
+ const make=(key,name,epic)=>({key,fields:{summary:key,issuetype:{name},created:'2020-01-01T00:00:00Z',status:{id:'1',name:'Testing'},customfield_9:epic},changelog:{startAt:0,total:0,histories:[]}});
+ const epics=[make('CSP-100','Epic'),make('CSP-200','Epic')],members=[make('CSP-1','Story','CSP-100'),make('CSP-2','Story','CSP-100'),make('CSP-3','Bug','CSP-100'),make('CSP-4','Sub-task','CSP-100')];members[3].fields.issuetype.subtask=true;
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);if(u.pathname.endsWith('/search')){const q=u.searchParams.get('jql');queries.push(q);return response({total:q.startsWith('cf[')?members.length:epics.length,issues:q.startsWith('cf[')?members:epics});}return response(members.find(i=>u.pathname.endsWith('/'+i.key)));};
+ const root=f.hub.querySelector('#jea-host').shadowRoot;
+ root.getElementById('load').click();await until(()=>!root.getElementById('run').disabled);assert.equal(root.querySelectorAll('#sprints input').length,2);
+ root.getElementById('status-all').checked=false;for(const input of root.querySelectorAll('#statuses input'))input.checked=['new','testing'].includes(input.value);
+ root.getElementById('run').click();await until(()=>!root.getElementById('run').disabled);assert.match(root.getElementById('message').textContent,/分析完成/);
+ assert.ok(queries.some(q=>q==='cf[9] in ("CSP-200","CSP-100")'));assert.equal(root.querySelectorAll('#results section').length,1);assert.deepEqual([...root.querySelectorAll('#results td:first-child')].map(x=>x.textContent),['Testing','所选状态合计']);
+ root.querySelector('#results td button').click();const popup=w.document.getElementById('jira-monitor-issue-details').shadowRoot;assert.equal(popup.querySelectorAll('tbody tr').length,2);assert.equal(root.getElementById('detail').childElementCount,0);popup.querySelector('input').value='CSP-2';popup.querySelector('input').dispatchEvent(new w.Event('input'));assert.equal(popup.querySelectorAll('tbody tr').length,1);popup.querySelector('button').click();assert.equal(w.document.getElementById('jira-monitor-issue-details'),null);
+ root.getElementById('teams-preview').click();root.getElementById('teams-send').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data),mail=new JSDOM(payload.email.bodyHtml);assert.deepEqual([...mail.window.document.querySelectorAll('tbody td:first-child')].map(x=>x.textContent).filter(x=>x==='New'||x==='Testing'),['Testing']);
+ const html=Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString(),model=JSON.parse(/<script id="report-data" type="application\/json">(.*?)<\/script>/.exec(html)[1]);assert.equal(model.groups.length,1);assert.deepEqual(model.groups[0].rows.map(x=>x.name),['Testing','所选状态合计']);assert.equal(model.groups[0].issues.length,2);f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));f.dom.window.close();mail.window.close();
+});
+
+test('DEV reads and deduplicates Subtask owners and mentions them all, never the Story owner',async()=>{
+ const f=boot(),w=f.w,root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;
+ w.GM_setValue('jira-monitor-rules-v1',alertState().rules);
+ // Controller loads rules when starting the next scan.
+ const issue=apiIssue('CSP-1');issue.changelog.histories[0].created=new Date(Date.now()-30*86400000).toISOString();issue.fields.assignee={displayName:'Story Owner',emailAddress:'parent@example.com',name:'parent'};
+ const alice={displayName:'Alice',emailAddress:'alice@example.com',name:'alice'},bob={displayName:'Bob',emailAddress:'bob@example.com',name:'bob'};
+ issue.fields.subtasks=[{key:'CSP-11',fields:{assignee:alice}},{key:'CSP-12',fields:{assignee:{...alice,emailAddress:'ALICE@example.com'}}},{key:'CSP-13',fields:{}},{key:'CSP-14',fields:{assignee:null}}];
+ const calls=[];w.fetch=async path=>{calls.push(path);if(path==='/rest/api/2/search')return response({total:1,issues:[issue]});if(path.includes('/CSP-13?'))return response({fields:{assignee:bob}});return response(issue);};
+ root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done'&&!root.querySelector('[data-start]').disabled);
+ const result=job(f).results[0];assert.deepEqual(result.devAssignees.map(u=>u.name),['Alice','Bob']);assert.ok(calls.some(p=>p.includes('subtasks')));assert.ok(calls.some(p=>p.includes('/CSP-13?fields=assignee')));
+ // Isolate the DEV alert in the snapshot to verify that DCT does not add the parent recipient.
+ const state=job(f);state.rules=alertState().rules;state.results[0].rules=state.results[0].rules.filter(r=>r.name==='DEV');w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));
+ root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data),card=payload.attachments[0].content;assert.deepEqual(card.msteams.entities.map(e=>e.mentioned.id),['alice@example.com','bob@example.com']);assert.doesNotMatch(JSON.stringify(card),/parent@example.com|Story Owner/);assert.match(payload.email.bodyHtml,/Alice、Bob/);assert.equal(payload.items[0].devAssignees.length,2);assert.equal(payload.email.to,'test@example.com');f.requests[0].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);assert.equal(w.location.pathname,'/issues/');f.dom.window.close();
+});
+
+test('pausing during a Subtask request prevents partial owners and results from being saved',async()=>{
+ const f=boot(),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot,issue=apiIssue('CSP-1');issue.fields.subtasks=[{key:'CSP-11',fields:{}}];let resolve;
+ f.w.fetch=async path=>{if(path==='/rest/api/2/search')return response({total:1,issues:[issue]});if(path.includes('/CSP-11?'))return new Promise(r=>resolve=r);return response(issue);};
+ root.querySelector('[data-start]').click();await until(()=>resolve);root.querySelector('[data-pause]').click();resolve(response({fields:{assignee:{displayName:'Late Owner',emailAddress:'late@example.com'}}}));await new Promise(r=>setTimeout(r,5));assert.equal(job(f).paused,true);assert.equal(job(f).results.length,0);assert.equal(job(f).index,0);assert.equal(f.requests.length,0);f.dom.window.close();
+});
+
+test('mixed DEV and DCT alerts include Subtask owners and the parent owner without duplicates',async()=>{
+ const state=alertState();state.rules.push({...state.rules[0],name:'DCT'});state.results=state.results.slice(0,1);state.results[0].rules.push({...state.results[0].rules[0],name:'DCT'});state.results[0].devAssignees=[{name:'Dev A',email:'dev-a@example.com',account:'dev-a'},{name:'Dev B',email:'dev-b@example.com',account:'dev-b'}];
+ const f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}}),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data);assert.deepEqual(payload.attachments[0].content.msteams.entities.map(e=>e.mentioned.id),['dev-a@example.com','dev-b@example.com','demo@example.com']);f.requests[0].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);f.dom.window.close();
 });

@@ -10,8 +10,10 @@
       return {id:key,name:epicNames.get(key)||key,state:''};
     });
   }
+  function discoverEpics(issue){return /^epic$/i.test(issue.fields?.issuetype?.name||'')?[{id:issue.key,name:epicNames.get(issue.key)||issue.key,state:''}]:issue.fields?.issuetype?.subtask?[]:sprints(issue.fields[field]);}
+  function epicMemberQuery(ids){const selector=field==='parent'?'parent':'cf['+field.replace('customfield_','')+']';return selector+' in ('+ids.map(id=>'"'+id+'"').join(',')+')';}
   async function loadEpicNames(issues){
-    const keys=[...new Set(issues.flatMap(i=>sprints(i.fields[field]).map(x=>x.id)))];
+    const keys=[...new Set(issues.flatMap(i=>discoverEpics(i).map(x=>x.id)))];
     // Restrict lookup to observed Epic keys; never broaden the user's Story query.
     for(let offset=0;offset<keys.length;offset+=100){
       const subset=keys.slice(offset,offset+100),params=new URLSearchParams({jql:'key in ('+subset.join(',')+')',fields:'summary,issuetype',maxResults:'100'});

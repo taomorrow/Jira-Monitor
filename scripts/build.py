@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.6.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.7.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.6.0')
+t=t[t.index('(function ()'):].replace('5.5.4','6.7.0')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -55,6 +55,7 @@ s=s.replace("const close=()=>{$('overlay').style.display='none';lastFocus?.focus
 hub=(root/'src/hub.js').read_text()
 hub += s[s.index('  function validateTeamsUrl(value){'):s.index('  function teamsResponseInfo')]+'hub.validateWebhook=validateTeamsUrl;\n'
 hub += (root/'src/mail.js').read_text()
+hub += (root/'src/analysis-details.js').read_text()
 
 # Build isolated monitor controllers: explicit main-window work and automatic detail popup.
 t=t.replace('(function () {', 'function initTimeout(detailOnly){',1)
@@ -75,7 +76,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.6.0',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.7.0',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -117,8 +118,8 @@ s=s.replace("const o=text('option',key,picker);o.value=key;", "const label=text(
 s=s.replace("  $('launch').style.display='none';", """  const toolbar=document.createElement('div');toolbar.className='query-toolbar';const controls=root.querySelector('.controls');controls.before(toolbar);toolbar.append($('period').parentElement,$('load'));
   const compact=document.createElement('style');compact.textContent='.query-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:16px 0}.query-toolbar label{width:240px;max-width:100%}.query-toolbar #load{width:auto;min-width:0;padding:8px 14px}.controls{align-items:start}#notify-box{grid-column:1/-1;padding:8px 12px}#notify-project{display:flex;gap:8px;flex-wrap:wrap;padding:4px 0}#notify-project label{display:inline-flex;flex-direction:row;align-items:center;gap:6px;background:#fff;border:1px solid #dce4f1;border-radius:7px;padding:7px 12px;cursor:pointer}#notify-project input{margin:0}.controls>#run,.controls>#export,.controls>#teams-preview{width:max-content;max-width:100%}.query-toolbar select{width:100%}';root.append(compact);
   $('launch').style.display='none';""")
-t=t.replace("node.closest?.('#jira-duration-panel-host')", "node.closest?.('#jira-duration-panel-host, #jira-monitor-hub, #jira-detail-panel-host')")
-t=t.replace("node.id!=='jira-duration-panel-host'", "!['jira-duration-panel-host','jira-monitor-hub','jira-detail-panel-host'].includes(node.id)")
+t=t.replace("node.closest?.('#jira-duration-panel-host')", "node.closest?.('#jira-duration-panel-host, #jira-monitor-hub, #jira-detail-panel-host, #jira-monitor-issue-details')")
+t=t.replace("node.id!=='jira-duration-panel-host'", "!['jira-duration-panel-host','jira-monitor-hub','jira-detail-panel-host','jira-monitor-issue-details'].includes(node.id)")
 # Batch lists use REST exclusively, including full search and history pagination.
 t=t.replace("  async function pump() {", (root/'src/batch-api.js').read_text()+"\n  async function pump() {")
 t=t.replace("    if(s.jobDirect)return;", """    if(s.mode==='batch'){
@@ -159,6 +160,18 @@ t=t.replace("autoNotify:r.auto.checked}", "autoNotify:r.auto.checked,enabled:r.e
 t=t.replace("未配置项目只统计、不发送", "未配置或未启用的项目只统计、不发送；可同时启用多个项目")
 t=t.replace("make('b','超时预警',null,panel)", "make('b','COE · 超时预警',null,panel)")
 s=s.replace("input.checked=true;label.append", "input.checked=hub.target(key+'-1')!==null;input.disabled=hub.projects().some(p=>p.projectKey===key&&p.enabled===false);if(input.disabled)label.title='项目通知已停用，请在配置中心启用';label.append")
+# Replace inline drilldown with a separate, searchable dialog for both analysis modules.
+a=s.index('  function details(title,items){');b=s.index('  function render(){',a)
+s=s[:a]+"  function details(title,items){hub.showIssueDetails(title,items,activePeriod); }\n"+s[b:]
+# Fetch Subtask owners as part of the same cancellable scan transaction.
+t=t.replace('fields=assignee,status,summary,issuetype&expand=changelog','fields=assignee,status,summary,issuetype,subtasks&expand=changelog')
+t=t.replace("    return {events,issueType:", "    const devRule=CONFIG.rules.find(r=>norm(r.name)==='DEV');const devAssignees=devRule?.currentStatuses.map(norm).includes(norm(fields.status.name))?await subtaskAssignees(fields,checkpoint):[];checkpoint();\n    return {devAssignees,events,issueType:")
+t=t.replace('await issueHistory(keyOf(location.href));','await issueHistory(keyOf(location.href),()=>valid(id,token));')
+t=t.replace('assigneeEmail:data.assigneeEmail,', 'devAssignees:data.devAssignees,assigneeEmail:data.assigneeEmail,')
+t=t.replace("div.append(a,document.createTextNode(' · '+(item.assignee||'未读取到经办人')));", "div.append(a,document.createTextNode(' · '+scanOwnerLabel(item)));")
+t=t.replace("item.summary,item.assignee||'',item.currentStatus", "item.summary,norm(rule.name)==='DEV'?devOwnerLabel(item):(item.assignee||''),item.currentStatus")
+t=t.replace('  function teamsPayload(', '  function baseTeamsPayload(',1)
+t=t.replace('  function safeError(error){', (root/'src/dev-assignees.js').read_text()+'\n  function safeError(error){')
 # Build Epic from the same analysis engine so filters, drilldowns and notification formats stay aligned.
 epic=s.replace('Sprint','Epic').replace('sprint-analysis','epic-analysis').replace('hub.sprint.append(host)','hub.epic.append(host)').replace('jsa-host','jea-host')
 a=epic.index('  function sprints(value) {');b=epic.index('  function statusAt(',a)
@@ -167,12 +180,20 @@ a=epic.index('  async function detectField(){');b=epic.index('  async function s
 epic=epic[:a]+(root/'src/epic-field.js').read_text()+epic[b:]
 epic=epic.replace('<h1>Epic Analysis', '<h1>Epic').replace("g.name+' · '+g.id,card", "g.name,card")
 a=epic.index('<div class="notice">');b=epic.index('</div>',a)
-epic=epic[:a]+'<div class="notice">口径：仅统计当前查询范围内的 Story，按当前 Epic 归属分组并回溯对比时点的状态；不还原历史 Epic 归属及历史筛选条件。无 Epic 的 Story 单独分组，不包含 Bug、Task 或子任务。</div>'+epic[b+6:]
+epic=epic[:a]+'<div class="notice">口径：当前查询用于发现 Epic；分析所选 Epic 下全部 Story，不受列表其他筛选条件限制。不包含 Bug、Task、Subtask，不还原历史 Epic 归属。对比两侧均为 0 的状态行及空 Epic 自动隐藏。</div>'+epic[b+6:]
 epic=epic.replace('summary,status,created,updated,${field}', 'summary,status,created,updated,issuetype,parent,${field}')
-epic=epic.replace('    return all;\n  }\n  async function history', "    return all.filter(isStory);\n  }\n  async function history")
-epic=epic.replace('for(const i of issues){const list=', 'await loadEpicNames(issues);\n    for(const i of issues){const list=')
+
+epic=epic.replace('for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:\'未分配 Epic\',state:\'\'});', 'await loadEpicNames(issues);\n    for(const i of issues){const list=discoverEpics(i);')
 epic=epic.replace("/^active$/i.test(s.state)", 'true')
 epic=epic.replace('const scoped=full.filter(i=>matchesEpic(i,field,ids));', 'const scoped=full.filter(i=>isStory(i)&&matchesEpic(i,field,ids));')
-epic=epic.replace('本工具只读取 Jira，不修改任务。', '仅统计当前查询内的 Story；Epic 成员按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。')
+epic=epic.replace('const pageIssues=await search(jql), issues=pageIssues.filter(i=>matchesEpic(i,field,ids))', 'const epicQuery=epicMemberQuery(ids);const pageIssues=await search(epicQuery), issues=pageIssues.filter(i=>isStory(i)&&matchesEpic(i,field,ids))')
+epic=epic.replace("JQL：${jql}｜所选 Epic", "JQL：${epicQuery}｜所选 Epic").replace("new URLSearchParams({jql});", "new URLSearchParams({jql:epicQuery});")
+a=epic.index('  function selectStatusGroups(');b=epic.index('  function ',a+12)
+selection=epic[a:b];end=selection.rfind('});');assert end>=0
+epic=epic[:a]+selection[:end]+'}).filter(g=>[...g.rows.values()].some(r=>r.before.length||r.after.length));'+selection[end+3:]+epic[b:]
+epic=epic.replace('const rows=[...g.rows.values()].sort(', 'const rows=[...g.rows.values()].filter(r=>r.before.length||r.after.length).sort(')
+epic=epic.replace('本工具只读取 Jira，不修改任务。', '统计所选 Epic 下全部 Story；按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。')
+epic=epic.replace('统计当前页面查询的全部分页，不扩大到整个 Epic。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。','从当前查询发现 Epic，再统计所选 Epic 下全部 Story；数量按你的 Jira 可见权限计算。')
+epic=epic.replace('当前页面全部分页｜JQL：${epicQuery}', '所选 Epic 全部 Story｜JQL：${epicQuery}')
 s=s.replace('<h1>Sprint Analysis', '<h1>Sprint')
 (root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n'+epic+'\n})();\n')

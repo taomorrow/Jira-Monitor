@@ -3,22 +3,23 @@
     const keys=reports.map(x=>x.item.key),jiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql:'key in ('+keys.join(',')+')'});
     const warning=reports.filter(x=>x.report.rules.some(r=>r.level==='warning')).length,overdue=reports.filter(x=>x.report.rules.some(r=>r.level==='overdue')).length;
     const title=target.projectKey+' · 超时预警列表',subtitle=reports.length+' 条工单 · 即将超期 '+warning+' 条 · 已超期 '+overdue+' 条（同一工单可命中不同规则）';
-    const rows=reports.map(({item,report})=>[item.key,item.summary,item.assignee||'未分配',report.rules.map(r=>r.name+' '+r.sla+' · '+r.days.toFixed(2)+'天').join(' / ')]);
+    const rows=reports.map(({item,report})=>[item.key,item.summary,report.assignee||'未分配',report.rules.map(r=>r.name+' '+r.sla+' · '+r.days.toFixed(2)+'天').join(' / ')]);
     const text=title+'\n'+subtitle+'\n'+rows.map(row=>row.join(' | ')).join('\n');
     const body=[{type:'TextBlock',text:title,weight:'Bolder',size:'Medium',wrap:true},{type:'TextBlock',text:subtitle,wrap:true}];
     const card={type:'AdaptiveCard',version:'1.2',msteams:{width:'Full',entities:[]},body,actions:[{type:'Action.OpenUrl',title:'在 Jira 查看全部 '+reports.length+' 条',url:jiraUrl}]};
     const attachment={contentType:'application/vnd.microsoft.card.adaptive',contentUrl:null,content:card};
     let displayed=0;
     for(const {item,report} of reports){
-      const mention=report.attachments[0].content.msteams.entities[0];
-      const block={type:'Container',separator:true,items:[{type:'TextBlock',text:'['+item.key+']('+location.origin+'/browse/'+encodeURIComponent(item.key)+') · '+(mention?mention.text:(item.assignee||'未分配')),weight:'Bolder',wrap:true},{type:'TextBlock',text:String(item.summary||'').slice(0,180),wrap:true,spacing:'Small'},...report.rules.map(r=>({type:'TextBlock',text:r.name+' · '+r.sla+' · '+r.days.toFixed(2)+'天',color:r.level==='overdue'?'Attention':'Warning',wrap:true,spacing:'Small'}))]};
+      const mentions=report.attachments[0].content.msteams.entities||[],owner=report.attachments[0].content.body[2].text.replace(/^(负责人|通知负责人)：/,'');
+      const block={type:'Container',separator:true,items:[{type:'TextBlock',text:'['+item.key+']('+location.origin+'/browse/'+encodeURIComponent(item.key)+') · '+(owner||'未分配'),weight:'Bolder',wrap:true},{type:'TextBlock',text:String(item.summary||'').slice(0,180),wrap:true,spacing:'Small'},...report.rules.map(r=>({type:'TextBlock',text:r.name+' · '+r.sla+' · '+r.days.toFixed(2)+'天',color:r.level==='overdue'?'Attention':'Warning',wrap:true,spacing:'Small'}))]};
+      const previousEntities=[...card.msteams.entities];for(const mention of mentions)if(!card.msteams.entities.some(x=>x.mentioned.id.toLowerCase()===mention.mentioned.id.toLowerCase()))card.msteams.entities.push(mention);
       body.push(block);
-      if(new TextEncoder().encode(JSON.stringify(attachment)).length>23*1024){body.pop();break;}if(mention&&!card.msteams.entities.some(x=>x.mentioned.id===mention.mentioned.id))card.msteams.entities.push(mention);displayed++;
+      if(new TextEncoder().encode(JSON.stringify(attachment)).length>23*1024){body.pop();card.msteams.entities=previousEntities;break;}displayed++;
     }
     if(displayed<reports.length)body.push({type:'TextBlock',text:'卡片显示前 '+displayed+' 条，共 '+reports.length+' 条；完整列表见邮件或下方 Jira 按钮。',wrap:true,isSubtle:true});
     const meta='扫描时间：'+beijingTime(Math.max(...reports.map(x=>x.item.checkedAt||0)));
     const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+target.projectKey+' · 超时预警列表（'+reports.length+'条）',bodyText:text,bodyHtml:hub.emailCard({title,subtitle,sections:[{title:'即将超期 / 已超期',headers:['Jira','摘要','负责人','规则与时长'],rows}],meta,url:jiraUrl})}:{enabled:false};
-    return {type:'message',reportType:'timeout-summary',projectKey:target.projectKey,jiraUrl,summary:subtitle,text,email,scanTime:meta,items:reports.map(({item,report})=>({jiraKey:item.key,summary:item.summary,assignee:item.assignee,jiraUrl:report.jiraUrl,rules:report.rules})),attachments:[attachment]};
+    return {type:'message',reportType:'timeout-summary',projectKey:target.projectKey,jiraUrl,summary:subtitle,text,email,scanTime:meta,items:reports.map(({item,report})=>({jiraKey:item.key,summary:item.summary,assignee:report.assignee,devAssignees:item.devAssignees||[],jiraUrl:report.jiraUrl,rules:report.rules})),attachments:[attachment]};
   }
   function alertCooldownKey(item,target){return 'jira-monitor-teams-cooldown-v2:'+target.projectKey+':'+item.key+':'+target.webhook+':'+(target.recipients||[]).map(x=>x.toLowerCase()).sort().join(';');}
   async function sendBatchAlerts(source,automatic=false){

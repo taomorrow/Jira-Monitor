@@ -87,3 +87,7 @@ Sprint 分析完成后可直接“导出交互报告”。推送时默认勾选�
 项目行“启用通知”控制 COE、Sprint、Epic 所有手动/自动通知，关闭后只分析不发送。多项目可同时启用，按各项目 Webhook / 收件人分别提交。旧配置未包含 enabled 字段时按启用处理。
 
 Epic 使用 `reportType: "epic-analysis"`，邮件仍读取 `email.enabled`、`email.to`、`email.subject`、`email.bodyHtml` 和可选 `email.attachments`。与 Sprint 一样，一项目一封邮件；如有 reportType 分支，需允许 Epic，勿在 Story / 卡片附件循环里发信。
+
+## v6.7.0：DEV 负责人
+
+DEV 预警正文和 Teams 提及使用去重后的子任务负责人，DCT 仍使用父工单负责人。邮件收件人继续使用项目配置，不自动追加子任务负责人邮箱。列表载荷 `items[].devAssignees` 包含负责人姓名、账号及 Jira 返回的邮箱；未提供邮箱且未配置 Teams 映射时只显示姓名。旧扫描结果需重新扫描。Epic 的两侧零数量行在邮件及附件中一并隐藏。

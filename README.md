@@ -1,4 +1,4 @@
-# Jira Monitor v6.6.0
+# Jira Monitor v6.7.0
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -79,10 +79,18 @@ HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看�
 
 验证未连接实际 Jira / Teams / 邮件服务，也未发送真实通知。
 
-## Epic 分析（v6.6.0）
+## Epic 分析（v6.7.0）
 
-左侧 Epic → 载入当前页面（全部分页）→ 多选 Epic、状态和日/周对比 → 开始分析。仅统计本次 Jira 查询范围内的 Story（也识别“故事”“用户故事”类型名），排除 Bug、Task 和子任务。按 Epic 编号和摘要显示分组，无关联的 Story 归入“未分配 Epic”。不自动扩大到整个 Epic；如需完整数量，请先调整 Jira 查询，包含需要统计的 Story 和状态。
+左侧 Epic → 载入当前页面（全部分页）→ 多选 Epic、状态和日/周对比 → 开始分析。当前查询仅用于发现 Epic，可从 Epic 工单或已关联工单识别 Epic；正式分析按 Epic Link / parent 查询所选 Epic 下全部 Story（也识别“故事”“用户故事”类型名），不再受列表的其他筛选条件限制。排除 Bug、Task、Subtask 等其他类型，没有 Epic 归属的 Story 不纳入。统计数量以当前账号的 Jira 可见权限为准。
 
-支持点击数量查看工单明细、状态变化、CSV、独立交互 HTML 报告及 Teams / 邮件预览推送。各项目按 Story 的项目 Key 路由，仅向已启用项目提交。通知载荷为 `reportType: "epic-analysis"`，与 Sprint 共用卡片和 `email` 字段格式；如工作流按 reportType 分支，请增加 Epic 分支。Sprint 和 Epic 只在用户确认后发送，“批量自动通知”仅用于 COE。
+Epic 两个对比时点数量都为 0 的状态行自动隐藏；所选状态下两侧都无数量的 Epic 也隐藏。页面、CSV、Teams、邮件和交互报告沿用同一规则，状态顺序不变。Sprint、Epic 点击数量或“查看变化”均在独立、可搜索、可缩放的明细弹窗中显示，右上角 ❌ 关闭，不再滚动到页面底部；导出的独立报告也使用明细弹窗。
 
-优先从 Jira 字段定义识别 Epic Link，兼容无 Epic Link 时使用 parent 字段。按照 Atlassian [Epic Link 字段说明](https://developer.atlassian.com/cloud/jira/software/rest/intro)读取当前所属 Epic，再用完整状态历史回溯昨天/上周状态；不会还原过去的 Epic 归属。无 Epic 读取权限时以编号显示。完整历史缺失时停止生成结果，避免误报。验证使用模拟 Jira 接口，未向真实 Teams 或邮箱发送消息。
+各项目按 Story 的项目 Key 路由，仅向已启用项目提交。Epic 通知载荷为 `reportType: "epic-analysis"`，与 Sprint 共用卡片和 `email` 字段格式；如工作流按 reportType 分支，请增加 Epic 分支。Sprint 和 Epic 只在用户确认后发送，“批量自动通知”仅用于 COE。
+
+优先从 Jira 字段定义识别 Epic Link，兼容无 Epic Link 时使用 parent 字段。按照 Atlassian [Epic Link 字段说明](https://developer.atlassian.com/cloud/jira/software/rest/intro)读取当前所属 Epic，再用完整状态历史回溯昨天/上周状态；不会还原过去的 Epic 归属。无 Epic 读取权限时以编号显示。完整历史缺失时停止生成结果，避免误报。
+
+## DEV 子任务负责人（v6.7.0）
+
+COE 扫描 DEV 状态工单时读取其全部子任务负责人，去重后用于 DEV 的负责人显示、Excel、Teams 提及和邮件正文，不再使用父工单负责人代替。无负责人时明确显示未分配，不虚构提及；Jira 返回邮箱或配置了 Teams 用户映射时生成真正的 @提及，否则显示姓名。DCT 保持使用父工单负责人；同一列表同时命中 DEV 与 DCT 时合并去重相应通知对象。
+
+子任务负责人读取与父工单扫描共用暂停/停止检查，读取失败则暂停保留进度，不保存不完整结果。升级前已保存的扫描结果不含子任务负责人，请停止旧任务并重新扫描。邮件收件人继续遵循项目配置，提及子任务负责人不会擅自添加邮件收件人。验证使用模拟 Jira 接口，未向真实 Teams 或邮箱发送消息。
