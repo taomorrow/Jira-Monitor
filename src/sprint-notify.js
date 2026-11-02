@@ -17,15 +17,22 @@
         report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
         const file=reportFile(projectGroups,projectKey);
         if(report.payload.email.enabled&&$('attach-report').checked){report.payload.email.attachments=[{name:file.name,contentType:'text/html',contentBytes:reportBase64(file.html)}];report.payload.email.bodyHtml+='<p style="font:12px Arial;color:#718098">附交互报告：'+hub.escapeHtml(file.name)+'。请下载附件并使用浏览器打开，点击数字查看工单明细和状态变化。</p>';}
-        if(new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
-        return {projectKey,target,destination,report,file,data:JSON.stringify(report.payload)};
+        const oversized=new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
+        const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
+        if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
+        if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
+        report.payload.teams={enabled:!emailOnly};
+        if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}
+        return {projectKey,target,destination,report,file,emailOnly,data:JSON.stringify(report.payload)};
       });
       openTeams('项目推送预览 · '+deliveries.length+' 个项目');
+      if(deliveries.some(item=>item.emailOnly))message('所选数量超过 Teams 大小限制，所选数据只通过邮件发送');
       text('p','每个项目分别发送到对应 Teams 和邮件收件人。勾选邮件附报告时，载荷另含该项目的 Jira 编号、摘要及状态变化，需工作流配置附件步骤；下方可先下载检查。',teamsBox);
       const preview=document.createElement('div');preview.id='teams-preview-content';teamsBox.append(preview);
       for(const item of deliveries){
         const card=text('section','',preview);card.className='card';
         text('h2',item.projectKey+' · Sprint Analysis',card);
+        if(item.emailOnly)text('p','所选数量超过 Teams 大小限制，所选数据只通过邮件发送',card).setAttribute('role','status');
         const download=text('button','下载该项目交互报告',card);download.onclick=()=>downloadReport(item.file);
         text('p',item.report.payload.email.attachments?.length?'邮件包含交互报告附件载荷（需要工作流映射附件字段）':'邮件未附交互报告',card).className='muted';
         const mailPreview=text('button','预览邮件正文',card);mailPreview.onclick=()=>hub.previewEmail(item.report.payload.email);
@@ -58,7 +65,7 @@
               ontimeout:()=>finish('超时，结果未知，请检查工作流；未重试'),onabort:()=>finish('已中止，结果未知；未重试')});}
             catch(error){finish('请求未发出：'+teamsResponseInfo(error));}
           });
-          outcomes.push(item.projectKey+'：'+outcome);
+          outcomes.push(item.projectKey+'：'+(item.emailOnly?'仅邮件 · ':'')+outcome);
         }
         teamsSending=false;cancel.disabled=false;cancel.textContent='关闭';status.style.whiteSpace='pre-wrap';status.textContent=outcomes.join('\n');
       });send.className='primary';cancel.focus();

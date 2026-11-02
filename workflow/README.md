@@ -17,3 +17,13 @@
 交互报告是 HTML 附件：下载后用浏览器打开，点击数量筛选 Jira；邮件正文自身不运行 JavaScript。附件必须经过上面的字段映射，不能仅更新脚本。
 
 参考：[Office 365 Outlook 连接器](https://learn.microsoft.com/en-us/connectors/office365connector/)、[排查连接失败](https://learn.microsoft.com/en-us/power-automate/fix-connection-failures)。
+
+## Epic 超限时仅发送邮件
+
+邮件分支直接从触发器运行，与 Teams 分支平行。Teams 发送动作或整个卡片循环外增加条件：
+
+```text
+not(equals(triggerBody()?['teams']?['enabled'], false))
+```
+
+仅条件为真时执行 Teams；条件为假跳过 Teams。超限载荷含 `teams.enabled=false`、`deliveryMode=email-only` 和空的顶层 `attachments`，但 `email` 正文及附件完整保留。不要把邮件放在卡片循环内或依赖 Teams 成功，否则空卡片数组会导致邮件也被跳过。

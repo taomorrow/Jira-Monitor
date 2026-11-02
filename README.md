@@ -1,4 +1,4 @@
-# Jira Monitor v6.8.1
+# Jira Monitor v6.8.2
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -118,3 +118,9 @@ Sprint / Epic 的“通知项目”是报告中工单所属项目，不是 Epic 
 COE 新增“预览邮件 / 报告”和“导出交互报告”。预览显示实际收件人、邮件 HTML 和附件，预览/下载不触发通知；批量推送按项目附上仅包含该项目预警工单的 HTML 交互报告。手动导出完整扫描报告时包含已扫描的正常/预警工单，点击 DEV / DCT 各级别数量筛选、搜索、打开 Jira。详情通知也附当前工单报告。Sprint / Epic 的推送预览增加“预览邮件正文”，保留项目报告附件。报告不含 Webhook、收件人列表或账号标识。
 
 Teams 收到消息不等于邮件已投递。脚本只向 Webhook 提交 `email` 和报告附件；邮件动作必须在你的 Power Automate 工作流中存在并成功执行。新增 [邮件动作与附件配置](workflow/README.md)、可审查的动作片段和兼容触发器 schema；不能仅更新脚本就修复账号连接或被跳过的邮件步骤。当前未获得工作流运行记录，无法确认实际投递故障原因或已恢复。
+
+## v6.8.2：星形入口与 Epic 超限仅邮件
+
+浮动入口改为无文字四角星，保留拖动和位置记忆。Epic 按项目检查 Teams 卡片大小，超过 26 KiB 时显示“所选数量超过 Teams 大小限制，所选数据只通过邮件发送”，清空该项目顶层 `attachments` 并设置 `teams.enabled=false`、`deliveryMode=email-only`，保留完整邮件及已勾选的交互报告。没有邮件收件人时阻止提交并提示配置。未超限项目继续正常发送。
+
+工作流的邮件分支必须位于 Teams 循环之外，直接由触发器运行；Teams 分支增加条件 `not(equals(triggerBody()?['teams']?['enabled'], false))`，为真才发送卡片。旧版本载荷没有 teams 字段时仍正常发送。若邮件动作依赖 Teams 成功，需要先调整工作流；脚本无法自动修改远端工作流。

@@ -309,3 +309,17 @@ test('Epic label permission failure keeps current Story grouping; failed history
  assert.deepEqual([...root.querySelectorAll('#sprints input')].map(i=>i.value),['CFCSC-343']);assert.equal(calls.some(p=>p.includes('/rest/agile/')||p.includes('IS+NOT+EMPTY')),false);assert.equal(root.getElementById('report-export').disabled,failHistory);assert.match(root.getElementById('message').textContent,failHistory?/403.*History denied/:/分析完成/);assert.equal(f.requests.length,0);f.dom.window.close();
  }
 });
+
+test('Epic oversized Teams cards submit email only with complete report and reject missing recipients',async()=>{
+ for(const hasRecipients of [true,false]){
+ const f=boot(),w=f.w;f.store.get('jira-monitor-projects-v1')[0].recipients=hasRecipients?['test@example.com']:[];
+ const issues=Array.from({length:90},(_,i)=>({key:'CSP-'+(i+1),fields:{summary:'Story '+i,created:'2020-01-01T00:00:00Z',issuetype:{name:'Story'},status:{id:'1',name:'Open'},customfield_9:'CSP-'+(1000+i)},changelog:{startAt:0,total:0,histories:[]}}));
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);if(u.pathname.endsWith('/search')){const q=u.searchParams.get('jql');if(q.startsWith('key in')){const keys=q.slice(8,-1).split(',');return response({total:keys.length,issues:keys.map(key=>({key,fields:{summary:'Long Epic '.repeat(35),issuetype:{name:'Epic'}}}))});}return response({total:issues.length,issues});}return response(issues.find(i=>u.pathname.endsWith('/'+i.key)));};
+ const root=f.hub.querySelector('#jea-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
+ root.getElementById('teams-preview').click();
+ if(!hasRecipients){assert.match(root.getElementById('message').textContent,/未配置邮件收件人/);assert.equal(root.getElementById('teams-send'),null);}
+ else{assert.match(root.getElementById('message').textContent,/所选数量超过 Teams 大小限制，所选数据只通过邮件发送/);root.getElementById('teams-send').click();assert.equal(f.requests.length,1);const payload=JSON.parse(f.requests[0].data);assert.equal(payload.teams.enabled,false);assert.equal(payload.deliveryMode,'email-only');assert.deepEqual(payload.attachments,[]);assert.equal(payload.email.enabled,true);assert.match(payload.email.bodyText,/CSP-1089/);const html=Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString();assert.match(html,/CSP-90/);f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));}
+ f.dom.window.close();
+ }
+ const f=boot(),launcher=f.hub.querySelector('#launcher');assert.equal(launcher.textContent,'');assert.ok(launcher.querySelector('svg'));assert.equal(launcher.getAttribute('aria-label'),'打开 Jira Monitor');f.dom.window.close();
+});
