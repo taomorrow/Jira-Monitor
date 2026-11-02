@@ -189,6 +189,7 @@ test('Epic groups only Stories, drills down changes, sends separate project repo
  const make=(key,type,epic)=>({key,fields:{summary:'摘要 '+key,issuetype:{name:type,subtask:false},created:'2020-01-01T00:00:00Z',status:{id:'2',name:'In Progress'},[field]:epic?membership(epic):null},changelog:{startAt:0,total:1,histories:[{id:'1',created:new Date().toISOString(),items:[{field:'status',from:'1',fromString:'Open',to:'2',toString:'In Progress'}]}]}});
  const issues=[make('CSP-1','Story','CSP-100'),make('CSP-2','Story','CSP-200'),make('CSP-3','Bug','CSP-100'),make('CSP-4','Story',null),make('OSPIT-1','Story','CSP-100')],historyKeys=[];
  w.fetch=async path=>{const u=new URL(path,w.location.origin);
+ if(u.pathname.startsWith('/rest/agile/')){const id=u.pathname.split('/').at(-2),scoped=issues.filter(i=>(parent?i.fields[field]?.key:i.fields[field])===id);return response({startAt:0,total:scoped.length,issues:scoped});}
  if(u.pathname.endsWith('/field'))return response(parent?[{id:'parent'}]:[{id:field,schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);
  if(u.pathname.endsWith('/search'))return response(u.searchParams.get('jql').startsWith('key in')?{total:2,issues:['CSP-100','CSP-200'].map(key=>({key,fields:{summary:'Epic '+key}}))}:{total:issues.length,issues});
  const key=u.pathname.split('/').pop();historyKeys.push(key);return response(issues.find(i=>i.key===key));};
@@ -214,15 +215,15 @@ test('disabled projects retain COE results but skip both manual and automatic no
 });
 
 test('Epic discovers Epic issues and counts all their Stories beyond the current query, omitting zero rows everywhere',async()=>{
- const f=boot(),w=f.w,queries=[];
+ const f=boot(),w=f.w,queries=[],epicCalls=[];
  const make=(key,name,epic)=>({key,fields:{summary:key,issuetype:{name},created:'2020-01-01T00:00:00Z',status:{id:'1',name:'Testing'},customfield_9:epic},changelog:{startAt:0,total:0,histories:[]}});
  const epics=[make('CSP-100','Epic'),make('CSP-200','Epic')],members=[make('CSP-1','Story','CSP-100'),make('CSP-2','Story','CSP-100'),make('CSP-3','Bug','CSP-100'),make('CSP-4','Sub-task','CSP-100')];members[3].fields.issuetype.subtask=true;
- w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);if(u.pathname.endsWith('/search')){const q=u.searchParams.get('jql');queries.push(q);return response({total:q.startsWith('cf[')?members.length:epics.length,issues:q.startsWith('cf[')?members:epics});}return response(members.find(i=>u.pathname.endsWith('/'+i.key)));};
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.startsWith('/rest/agile/')){epicCalls.push(u.pathname);const scoped=members.filter(i=>i.fields.customfield_9===u.pathname.split('/').at(-2));return response({startAt:0,total:scoped.length,issues:scoped});}if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);if(u.pathname.endsWith('/search')){const q=u.searchParams.get('jql');queries.push(q);return response({total:q.startsWith('cf[')?members.length:epics.length,issues:q.startsWith('cf[')?members:epics});}return response(members.find(i=>u.pathname.endsWith('/'+i.key)));};
  const root=f.hub.querySelector('#jea-host').shadowRoot;
  root.getElementById('load').click();await until(()=>!root.getElementById('run').disabled);assert.equal(root.querySelectorAll('#sprints input').length,2);
  root.getElementById('status-all').checked=false;for(const input of root.querySelectorAll('#statuses input'))input.checked=['new','testing'].includes(input.value);
  root.getElementById('run').click();await until(()=>!root.getElementById('run').disabled);assert.match(root.getElementById('message').textContent,/分析完成/);
- assert.ok(queries.some(q=>q==='cf[9] in ("CSP-200","CSP-100")'));assert.equal(root.querySelectorAll('#results section').length,1);assert.deepEqual([...root.querySelectorAll('#results td:first-child')].map(x=>x.textContent),['Testing','所选状态合计']);
+ assert.deepEqual(epicCalls,['/rest/agile/1.0/epic/CSP-200/issue','/rest/agile/1.0/epic/CSP-100/issue']);assert.equal(root.querySelectorAll('#results section').length,1);assert.deepEqual([...root.querySelectorAll('#results td:first-child')].map(x=>x.textContent),['Testing','所选状态合计']);
  root.querySelector('#results td button').click();const popup=w.document.getElementById('jira-monitor-issue-details').shadowRoot;assert.equal(popup.querySelectorAll('tbody tr').length,2);assert.equal(root.getElementById('detail').childElementCount,0);popup.querySelector('input').value='CSP-2';popup.querySelector('input').dispatchEvent(new w.Event('input'));assert.equal(popup.querySelectorAll('tbody tr').length,1);popup.querySelector('button').click();assert.equal(w.document.getElementById('jira-monitor-issue-details'),null);
  root.getElementById('teams-preview').click();root.getElementById('teams-send').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data),mail=new JSDOM(payload.email.bodyHtml);assert.deepEqual([...mail.window.document.querySelectorAll('tbody td:first-child')].map(x=>x.textContent).filter(x=>x==='New'||x==='Testing'),['Testing']);
  const html=Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString(),model=JSON.parse(/<script id="report-data" type="application\/json">(.*?)<\/script>/.exec(html)[1]);assert.equal(model.groups.length,1);assert.deepEqual(model.groups[0].rows.map(x=>x.name),['Testing','所选状态合计']);assert.equal(model.groups[0].issues.length,2);f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));f.dom.window.close();mail.window.close();
@@ -252,4 +253,27 @@ test('pausing during a Subtask request prevents partial owners and results from 
 test('mixed DEV and DCT alerts include Subtask owners and the parent owner without duplicates',async()=>{
  const state=alertState();state.rules.push({...state.rules[0],name:'DCT'});state.results=state.results.slice(0,1);state.results[0].rules.push({...state.results[0].rules[0],name:'DCT'});state.results[0].devAssignees=[{name:'Dev A',email:'dev-a@example.com',account:'dev-a'},{name:'Dev B',email:'dev-b@example.com',account:'dev-b'}];
  const f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}}),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data);assert.deepEqual(payload.attachments[0].content.msteams.entities.map(e=>e.mentioned.id),['dev-a@example.com','dev-b@example.com','demo@example.com']);f.requests[0].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);f.dom.window.close();
+});
+
+test('Epic paginates per Epic and falls back from HTTP 400 to a single-Epic POST query',async()=>{
+ for(const fallback of [false,true]){
+ const f=boot(),w=f.w,calls=[];
+ const make=key=>({key,fields:{summary:key,created:'2020-01-01T00:00:00Z',issuetype:{name:'Story'},status:{id:'1',name:'Open'},customfield_9:'CSP-100'},changelog:{startAt:0,total:0,histories:[]}}),issues=[make('CSP-1'),make('CSP-2')],epic={key:'CSP-100',fields:{summary:'Epic',issuetype:{name:'Epic'}}};
+ w.fetch=async(path,options)=>{const u=new URL(path,w.location.origin);calls.push({path,options});if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',name:'Epic Link',clauseNames:['cf[9]','Epic Link'],schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);
+ if(u.pathname.startsWith('/rest/agile/')){if(fallback)return {ok:false,status:400,json:async()=>({errorMessages:['Unsupported Epic query']})};const start=Number(u.searchParams.get('startAt'));return response({total:2,startAt:start,issues:issues.slice(start,start+1)});}
+ if(u.pathname.endsWith('/search')){if(options?.method==='POST'){const body=JSON.parse(options.body);assert.equal(body.jql,'"Epic Link" = "CSP-100"');assert.equal(body.maxResults,50);return response({total:2,startAt:body.startAt,issues:issues.slice(body.startAt,body.startAt+1)});}return response({total:1,issues:[epic]});}
+ return response(issues.find(i=>u.pathname.endsWith('/'+i.key)));};
+ const root=f.hub.querySelector('#jea-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
+ assert.match(root.getElementById('message').textContent,/分析完成/);assert.deepEqual([...root.querySelectorAll('#results td button')].map(b=>b.textContent),['2','2','2','2']);assert.equal(calls.filter(c=>c.path.includes('/rest/agile/')).length,fallback?1:2);assert.equal(calls.filter(c=>c.options?.method==='POST').length,fallback?2:0);assert.equal(f.requests.length,0);f.dom.window.close();
+ }
+});
+
+test('Epic displays server error details and generates no partial report on a failed page',async()=>{
+ for(const denied of [false,true]){
+ const f=boot(),w=f.w;let fallbackCalls=0;
+ const epic={key:'CSP-100',fields:{summary:'Epic',issuetype:{name:'Epic'}}};
+ w.fetch=async(path,options)=>{if(path.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);if(path.includes('/rest/agile/'))return {ok:false,status:denied?403:400,json:async()=>({errorMessages:[denied?'Epic permission denied':'Epic endpoint unavailable']})};if(options?.method==='POST'){fallbackCalls++;return {ok:false,status:400,json:async()=>({errorMessages:['Epic Link search is disabled'],errors:{jql:'Invalid Epic field'}})};}return response({total:1,issues:[epic]});};
+ const root=f.hub.querySelector('#jea-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
+ assert.match(root.getElementById('message').textContent,denied?/CSP-100.*403.*Epic permission denied/:/CSP-100.*兼容查询也失败.*Epic Link search is disabled.*Invalid Epic field/);assert.equal(fallbackCalls,denied?0:1);assert.equal(root.getElementById('export').disabled,true);assert.equal(root.getElementById('report-export').disabled,true);assert.equal(root.querySelectorAll('#results section').length,0);f.dom.window.close();
+ }
 });

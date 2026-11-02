@@ -1,4 +1,4 @@
-# Jira Monitor v6.7.0
+# Jira Monitor v6.7.1
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -79,7 +79,7 @@ HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看�
 
 验证未连接实际 Jira / Teams / 邮件服务，也未发送真实通知。
 
-## Epic 分析（v6.7.0）
+## Epic 分析（v6.7.1）
 
 左侧 Epic → 载入当前页面（全部分页）→ 多选 Epic、状态和日/周对比 → 开始分析。当前查询仅用于发现 Epic，可从 Epic 工单或已关联工单识别 Epic；正式分析按 Epic Link / parent 查询所选 Epic 下全部 Story（也识别“故事”“用户故事”类型名），不再受列表的其他筛选条件限制。排除 Bug、Task、Subtask 等其他类型，没有 Epic 归属的 Story 不纳入。统计数量以当前账号的 Jira 可见权限为准。
 
@@ -89,8 +89,12 @@ Epic 两个对比时点数量都为 0 的状态行自动隐藏；所选状态下
 
 优先从 Jira 字段定义识别 Epic Link，兼容无 Epic Link 时使用 parent 字段。按照 Atlassian [Epic Link 字段说明](https://developer.atlassian.com/cloud/jira/software/rest/intro)读取当前所属 Epic，再用完整状态历史回溯昨天/上周状态；不会还原过去的 Epic 归属。无 Epic 读取权限时以编号显示。完整历史缺失时停止生成结果，避免误报。
 
-## DEV 子任务负责人（v6.7.0）
+## DEV 子任务负责人（v6.7.1）
 
 COE 扫描 DEV 状态工单时读取其全部子任务负责人，去重后用于 DEV 的负责人显示、Excel、Teams 提及和邮件正文，不再使用父工单负责人代替。无负责人时明确显示未分配，不虚构提及；Jira 返回邮箱或配置了 Teams 用户映射时生成真正的 @提及，否则显示姓名。DCT 保持使用父工单负责人；同一列表同时命中 DEV 与 DCT 时合并去重相应通知对象。
 
 子任务负责人读取与父工单扫描共用暂停/停止检查，读取失败则暂停保留进度，不保存不完整结果。升级前已保存的扫描结果不含子任务负责人，请停止旧任务并重新扫描。邮件收件人继续遵循项目配置，提及子任务负责人不会擅自添加邮件收件人。验证使用模拟 Jira 接口，未向真实 Teams 或邮箱发送消息。
+
+### v6.7.1 Epic HTTP 400 兼容修复
+
+Epic 成员改为逐个 Epic 使用 Jira Software 成员接口分页读取，不再提交包含所有所选 Epic 的长查询。接口返回 400 / 404 / 405 / 501 时，仅对该 Epic 使用字段定义中的查询名称执行 POST 搜索；401 / 403 或服务端错误不自动换路径。分页不完整、重复或任一 Epic 请求失败时不生成部分报告。错误提示显示 Epic 编号、HTTP 状态及 Jira 返回的 errorMessages / errors，便于区分字段、查询和权限问题。参考 [Atlassian Data Center Epic API](https://developer.atlassian.com/server/jira/platform/rest/v10002/api-group-epic/)。此修复已用模拟 HTTP 400、兼容查询、分页和权限失败验证，未连接实际 Jira 服务。

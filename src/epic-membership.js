@@ -11,7 +11,8 @@
     });
   }
   function discoverEpics(issue){return /^epic$/i.test(issue.fields?.issuetype?.name||'')?[{id:issue.key,name:epicNames.get(issue.key)||issue.key,state:''}]:issue.fields?.issuetype?.subtask?[]:sprints(issue.fields[field]);}
-  function epicMemberQuery(ids){const selector=field==='parent'?'parent':'cf['+field.replace('customfield_','')+']';return selector+' in ('+ids.map(id=>'"'+id+'"').join(',')+')';}
+  function epicSingleQuery(id){const selector=field==='parent'?'parent':'"'+epicClause.replace(/[\\"]/g,'\\$&')+'"';return selector+' = "'+id+'"';}
+  function epicMemberQuery(ids){return ids.map(id=>'('+epicSingleQuery(id)+')').join(' OR ');}
   async function loadEpicNames(issues){
     const keys=[...new Set(issues.flatMap(i=>discoverEpics(i).map(x=>x.id)))];
     // Restrict lookup to observed Epic keys; never broaden the user's Story query.
