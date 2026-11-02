@@ -2,11 +2,11 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.5.1').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置')
+header=t[:t.index('(function ()')].replace('5.5.4','6.6.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.5.1')
+t=t[t.index('(function ()'):].replace('5.5.4','6.6.0')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -75,7 +75,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.5.1',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.6.0',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -150,4 +150,29 @@ end=s.index('\n',start)
 s=s[:start]+'  const STATUS_NAMES='+json.dumps(status_names,ensure_ascii=False)+';'+s[end:]
 s=s.replace("a.name.localeCompare(b.name)", "(STATUS_NAMES.findIndex(n=>normalized(n)===normalized(a.name))+1||STATUS_NAMES.length+1)-(STATUS_NAMES.findIndex(n=>normalized(n)===normalized(b.name))+1||STATUS_NAMES.length+1)||a.name.localeCompare(b.name)")
 s=s.replace('以下 12 个','以下 '+str(len(status_names))+' 个').replace('全部指定的 12 个状态','全部指定的 '+str(len(status_names))+' 个状态')
-(root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n})();\n')
+# Project notification gate applies to every module, including manual deliveries.
+t=t.replace("return rows[0]?{...rows[0],projectKey}:null;", "return rows[0]&&rows[0].enabled!==false?{...rows[0],projectKey}:null;")
+t=t.replace("'批量自动通知','操作'", "'启用通知','批量自动通知','操作'")
+t=t.replace("      const auto=add('input'", "      const enabled=add('input',null,'data-project-enabled',add('td',null,null,tr));enabled.type='checkbox';enabled.checked=value.enabled!==false;enabled.setAttribute('aria-label','启用项目通知');\n      const auto=add('input'")
+t=t.replace("{tr,key,webhook,emails,auto,deleted:false}", "{tr,key,webhook,emails,enabled,auto,deleted:false}")
+t=t.replace("autoNotify:r.auto.checked}", "autoNotify:r.auto.checked,enabled:r.enabled.checked}")
+t=t.replace("未配置项目只统计、不发送", "未配置或未启用的项目只统计、不发送；可同时启用多个项目")
+t=t.replace("make('b','超时预警',null,panel)", "make('b','COE · 超时预警',null,panel)")
+s=s.replace("input.checked=true;label.append", "input.checked=hub.target(key+'-1')!==null;input.disabled=hub.projects().some(p=>p.projectKey===key&&p.enabled===false);if(input.disabled)label.title='项目通知已停用，请在配置中心启用';label.append")
+# Build Epic from the same analysis engine so filters, drilldowns and notification formats stay aligned.
+epic=s.replace('Sprint','Epic').replace('sprint-analysis','epic-analysis').replace('hub.sprint.append(host)','hub.epic.append(host)').replace('jsa-host','jea-host')
+a=epic.index('  function sprints(value) {');b=epic.index('  function statusAt(',a)
+epic=epic[:a]+(root/'src/epic-membership.js').read_text()+epic[b:]
+a=epic.index('  async function detectField(){');b=epic.index('  async function search(',a)
+epic=epic[:a]+(root/'src/epic-field.js').read_text()+epic[b:]
+epic=epic.replace('<h1>Epic Analysis', '<h1>Epic').replace("g.name+' · '+g.id,card", "g.name,card")
+a=epic.index('<div class="notice">');b=epic.index('</div>',a)
+epic=epic[:a]+'<div class="notice">口径：仅统计当前查询范围内的 Story，按当前 Epic 归属分组并回溯对比时点的状态；不还原历史 Epic 归属及历史筛选条件。无 Epic 的 Story 单独分组，不包含 Bug、Task 或子任务。</div>'+epic[b+6:]
+epic=epic.replace('summary,status,created,updated,${field}', 'summary,status,created,updated,issuetype,parent,${field}')
+epic=epic.replace('    return all;\n  }\n  async function history', "    return all.filter(isStory);\n  }\n  async function history")
+epic=epic.replace('for(const i of issues){const list=', 'await loadEpicNames(issues);\n    for(const i of issues){const list=')
+epic=epic.replace("/^active$/i.test(s.state)", 'true')
+epic=epic.replace('const scoped=full.filter(i=>matchesEpic(i,field,ids));', 'const scoped=full.filter(i=>isStory(i)&&matchesEpic(i,field,ids));')
+epic=epic.replace('本工具只读取 Jira，不修改任务。', '仅统计当前查询内的 Story；Epic 成员按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。')
+s=s.replace('<h1>Sprint Analysis', '<h1>Sprint')
+(root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n'+epic+'\n})();\n')

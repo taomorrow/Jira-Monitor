@@ -81,3 +81,9 @@ Sprint 分析完成后可直接“导出交互报告”。推送时默认勾选�
 批量超时预警现在使用 `reportType: "timeout-summary"`，每个项目只提交一份消息。`email.bodyHtml` 是完整预警列表的表格；`items` 包含每条工单的摘要、负责人和命中规则。既有流程若直接读取 attachments 发 Teams、读取 email 发邮件，可沿用。若触发器使用严格的 Schema，需允许 `reportType`、`items`，不应再强制要求单工单 `jiraKey` / `rules` 字段。
 
 发送邮件动作应放在项目汇总这次请求的邮件分支内，对一次请求执行一次；不要再放入逐工单 items 循环。收件人与正文表达式保持不变。自动扫描完成后才发汇总；手动可发送当前已扫描部分的预警结果。Teams 因容量限制显示部分记录时，邮件仍包含完整项目列表。
+
+## v6.6.0：项目启用开关与 Epic
+
+项目行“启用通知”控制 COE、Sprint、Epic 所有手动/自动通知，关闭后只分析不发送。多项目可同时启用，按各项目 Webhook / 收件人分别提交。旧配置未包含 enabled 字段时按启用处理。
+
+Epic 使用 `reportType: "epic-analysis"`，邮件仍读取 `email.enabled`、`email.to`、`email.subject`、`email.bodyHtml` 和可选 `email.attachments`。与 Sprint 一样，一项目一封邮件；如有 reportType 分支，需允许 Epic，勿在 Story / 卡片附件循环里发信。

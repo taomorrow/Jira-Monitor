@@ -1,4 +1,4 @@
-# Jira Monitor v6.5.1
+# Jira Monitor v6.6.0
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -6,14 +6,14 @@
 
 1. 用 Tampermonkey 打开并安装 `jiraMonitor.user.js`。它沿用 Jira Monitor 的 name / namespace，更新现有 Monitor 时保留其本地项目配置。
 2. 停用原独立 Sprint Analysis，避免重复入口。刷新 Jira，右下角点击 **Jira Monitor**。
-3. 在统一面板选择 **超时预警** 或 **Sprint Analysis**。默认不会因打开详情页就开始分析；需要时在左侧“配置中心”勾选“详情自动分析”，详情页将在右下角独立弹出分析浮窗，该选择会保存在本地。
-4. 打开左侧 **配置中心**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。两套功能立即使用同一份配置。未配置的项目可分析、导出，但不发送。
+3. 在统一面板选择 **COE（超时预警）**、**Sprint** 或 **Epic**。默认不会因打开详情页就开始分析；需要时在左侧“配置中心”勾选“详情自动分析”，详情页将在右下角独立弹出分析浮窗，该选择会保存在本地。
+4. 打开左侧 **配置中心**，按项目 Key（例如 CSP、OSPIT）填写 Webhook、邮件收件人和批量自动通知开关。三套功能使用同一份配置。勾选各行“启用通知”并保存，可同时启用多个项目。停用项目仍可分析和导出，手动和自动推送均跳过。旧配置默认沿用启用状态，保留已有通知行为。
 
 安装入口：[jiraMonitor.user.js](https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/jiraMonitor.user.js)。脚本后续更新从本仓库获取。
 
 ## 状态流程顺序
 
-状态筛选、Sprint 页面统计、CSV、Teams 卡片、邮件表格、独立交互报告统一使用：
+状态筛选、Sprint / Epic 页面统计、CSV、Teams 卡片、邮件表格、独立交互报告统一使用：
 
 New → Grooming → Open → In Progress → Ready For Test → Testing → Completed → SIT → Ready For UAT → UAT → Ready For Deploy → DEPLOYED → Done → Cancelled。
 
@@ -78,3 +78,11 @@ HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看�
 - 原仓库的测试保持在各自仓库中；本项目 `tests/` 是超时预警原版测试参考，旧面板假设不适用于统一 UI。
 
 验证未连接实际 Jira / Teams / 邮件服务，也未发送真实通知。
+
+## Epic 分析（v6.6.0）
+
+左侧 Epic → 载入当前页面（全部分页）→ 多选 Epic、状态和日/周对比 → 开始分析。仅统计本次 Jira 查询范围内的 Story（也识别“故事”“用户故事”类型名），排除 Bug、Task 和子任务。按 Epic 编号和摘要显示分组，无关联的 Story 归入“未分配 Epic”。不自动扩大到整个 Epic；如需完整数量，请先调整 Jira 查询，包含需要统计的 Story 和状态。
+
+支持点击数量查看工单明细、状态变化、CSV、独立交互 HTML 报告及 Teams / 邮件预览推送。各项目按 Story 的项目 Key 路由，仅向已启用项目提交。通知载荷为 `reportType: "epic-analysis"`，与 Sprint 共用卡片和 `email` 字段格式；如工作流按 reportType 分支，请增加 Epic 分支。Sprint 和 Epic 只在用户确认后发送，“批量自动通知”仅用于 COE。
+
+优先从 Jira 字段定义识别 Epic Link，兼容无 Epic Link 时使用 parent 字段。按照 Atlassian [Epic Link 字段说明](https://developer.atlassian.com/cloud/jira/software/rest/intro)读取当前所属 Epic，再用完整状态历史回溯昨天/上周状态；不会还原过去的 Epic 归属。无 Epic 读取权限时以编号显示。完整历史缺失时停止生成结果，避免误报。验证使用模拟 Jira 接口，未向真实 Teams 或邮箱发送消息。

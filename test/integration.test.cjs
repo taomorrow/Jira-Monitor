@@ -167,3 +167,47 @@ test('workflow order is shared by status filters, UI, CSV, Teams, email and inte
  const report=new JSDOM(Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString('utf8'));assert.deepEqual(JSON.parse(report.window.document.querySelector('#report-data').textContent).groups[0].rows.map(row=>row.name),ordered);report.window.close();f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));root.getElementById('teams-preview-cancel').click();
  root.getElementById('status-all').checked=false;for(const input of [...root.querySelectorAll('#statuses input')].reverse())input.checked=['cancelled','new','testing'].includes(input.value);root.getElementById('statuses').dispatchEvent(new w.Event('change'));await click('run');assert.deepEqual([...root.querySelectorAll('#results td:first-child')].map(td=>td.textContent),['New','Testing','Cancelled','所选状态合计']);f.dom.window.close();
 });
+
+test('notification enabled setting persists per project and gates Sprint preview and pending confirmation',async()=>{
+ const f=boot(),root=f.hub;root.querySelector('#nav-settings').click();
+ const settings=root.querySelector('#settings-view');assert.equal(settings.querySelector('[data-project-enabled]').checked,true);
+ settings.querySelector('[data-project-enabled]').checked=false;settings.querySelector('[data-project-save]').click();assert.equal(f.store.get('jira-monitor-projects-v1')[0].enabled,false);
+ const issue={key:'CSP-1',fields:{summary:'Story',created:'2020-01-01T00:00:00Z',status:{id:'1',name:'Open'},customfield_1:[{id:1,name:'Sprint',state:'active'}]},changelog:{startAt:0,total:0,histories:[]}};
+ f.w.fetch=async path=>response(path.includes('/field')?[{id:'customfield_1',schema:{custom:'com.pyxis.greenhopper.jira:gh-sprint'}}]:path.includes('/search')?{total:1,issues:[issue]}:issue);
+ const s=root.querySelector('#jsa-host').shadowRoot;
+ for(const id of ['load','run']){s.getElementById(id).click();await until(()=>!s.getElementById('run').disabled);}
+ const picker=s.getElementById('notify-project').querySelector('input');assert.equal(picker.disabled,true);assert.equal(picker.checked,false);picker.checked=true;s.getElementById('teams-preview').click();assert.match(s.getElementById('message').textContent,/未启用/);assert.equal(f.requests.length,0);
+ f.store.get('jira-monitor-projects-v1')[0].enabled=true;s.getElementById('teams-preview').click();assert.ok(s.getElementById('teams-send'));
+ f.store.get('jira-monitor-projects-v1')[0].enabled=false;s.getElementById('teams-send').click();await until(()=>s.getElementById('teams-send-status').textContent.includes('停用'));assert.equal(f.requests.length,0);f.dom.window.close();
+});
+
+test('Epic groups only Stories, drills down changes, sends separate project reports and supports parent fields',async()=>{
+ for(const parent of [false,true]){
+ const f=boot(),w=f.w;f.hub.querySelector('#nav-epic').click();assert.equal(f.hub.querySelector('#epic-view').hidden,false);assert.equal(f.hub.querySelector('#sprint-view').hidden,true);
+ const field=parent?'parent':'customfield_9',membership=key=>parent?{key}:key;
+ const make=(key,type,epic)=>({key,fields:{summary:'摘要 '+key,issuetype:{name:type,subtask:false},created:'2020-01-01T00:00:00Z',status:{id:'2',name:'In Progress'},[field]:epic?membership(epic):null},changelog:{startAt:0,total:1,histories:[{id:'1',created:new Date().toISOString(),items:[{field:'status',from:'1',fromString:'Open',to:'2',toString:'In Progress'}]}]}});
+ const issues=[make('CSP-1','Story','CSP-100'),make('CSP-2','Story','CSP-200'),make('CSP-3','Bug','CSP-100'),make('CSP-4','Story',null),make('OSPIT-1','Story','CSP-100')],historyKeys=[];
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);
+ if(u.pathname.endsWith('/field'))return response(parent?[{id:'parent'}]:[{id:field,schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);
+ if(u.pathname.endsWith('/search'))return response(u.searchParams.get('jql').startsWith('key in')?{total:2,issues:['CSP-100','CSP-200'].map(key=>({key,fields:{summary:'Epic '+key}}))}:{total:issues.length,issues});
+ const key=u.pathname.split('/').pop();historyKeys.push(key);return response(issues.find(i=>i.key===key));};
+ w.HTMLElement.prototype.scrollIntoView=()=>{};
+ const s=f.hub.querySelector('#jea-host').shadowRoot;
+ for(const id of ['load','run']){s.getElementById(id).click();await until(()=>!s.getElementById('run').disabled);}
+ assert.match(s.getElementById('message').textContent,/分析完成/);assert.equal(s.getElementById('sprints').querySelectorAll('input:checked').length,3);assert.match(s.getElementById('results').textContent,/Epic CSP-100/);assert.ok(!historyKeys.includes('CSP-3'));assert.equal(historyKeys.length,4);
+ const count=[...s.getElementById('results').querySelectorAll('td button')].find(b=>b.textContent==='2');assert.ok(count);count.click();assert.equal(s.getElementById('detail').querySelectorAll('a').length,2);
+ for(const input of s.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='CSP';s.getElementById('teams-preview').click();assert.ok(s.getElementById('teams-send'),s.getElementById('message').textContent);s.getElementById('teams-send').click();assert.equal(f.requests.length,1);
+ const payload=JSON.parse(f.requests[0].data);assert.equal(payload.reportType,'epic-analysis');assert.match(payload.email.subject,/Epic Analysis/);assert.match(payload.email.bodyText,/CSP-100/);assert.ok(payload.email.attachments.length);const report=Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString();assert.match(report,/CSP-1/);assert.doesNotMatch(report,/OSPIT-1|CSP-3/);
+ f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));assert.equal(w.location.pathname,'/issues/');assert.equal(f.errors.length,0);f.dom.window.close();
+ }
+});
+
+test('disabled projects retain COE results but skip both manual and automatic notification',async()=>{
+ for(const automatic of [false,true]){
+ const state=alertState(),f=boot('/issues/?jql=project%3DCSP',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}}),row=f.store.get('jira-monitor-projects-v1')[0];row.enabled=false;row.autoNotify=true;
+ const root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;
+ if(automatic){const issues=[apiIssue('CSP-1')];issues[0].changelog.histories[0].created=new Date(Date.now()-30*86400000).toISOString();f.w.fetch=async path=>response(path==='/rest/api/2/search'?{total:1,issues}:issues[0]);root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done'&&!root.querySelector('[data-start]').disabled);assert.equal(job(f).results.length,1);}
+ else{root.querySelector('[data-teams]').click();await until(()=>!root.querySelector('[data-start]').disabled);assert.equal(job(f).results.length,4);}
+ assert.equal(f.requests.length,0);f.dom.window.close();
+ }
+});

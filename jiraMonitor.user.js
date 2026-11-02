@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.5.1
-// @description  超时预警与 Sprint Analysis；统一面板、按项目共用 Teams 和邮件配置
+// @version      6.6.0
+// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
 // @grant        GM_registerMenuCommand
@@ -33,7 +33,7 @@ const style=document.createElement('style');style.textContent=`
 #workspace{display:flex;flex:1;min-height:0}nav{width:166px;flex-shrink:0;padding:18px 10px;background:#fff;border-right:1px solid #e8edf5}nav small{display:block;color:#95a0b2;font-size:10px;letter-spacing:1.6px;margin:2px 12px 12px}nav button{display:block;width:100%;text-align:left;padding:11px 12px;margin:4px 0;background:transparent;color:#64738b;border-radius:9px;font-weight:500;white-space:nowrap}nav button:hover{background:#f4f7fc}nav button[aria-selected=true]{background:#eaf0ff;color:#245de8;font-weight:700;box-shadow:inset 3px 0 #245de8}
 main{position:relative;isolation:isolate;flex:1;min-width:0;min-height:0;overflow:hidden}main>section{height:100%;overflow:auto;padding:18px}#timeout-view{padding:0}#resize-grip{z-index:5;position:absolute;bottom:0;right:0;width:22px;height:22px;cursor:nwse-resize;touch-action:none;background:repeating-linear-gradient(135deg,transparent 0 3px,#acbbd3 3px 4px,transparent 4px 6px);clip-path:polygon(100% 0,100% 100%,0 100%);opacity:.65}
 #detail-popup{position:fixed;bottom:76px;right:24px;width:min(420px,calc(100vw - 32px));z-index:2147483647;background:white;border:1px solid #dae3f1;border-radius:14px;box-shadow:0 12px 42px #243c6430;overflow:hidden}#detail-header{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #edf0f6;font-weight:600}#detail-header span{font-size:11px;color:#8694aa;margin-left:8px}#detail-content{max-height:min(480px,65vh);overflow:auto}
-#settings-view h2{font-size:21px;margin:0 0 6px}#settings-view p{color:#718098}#settings-view button{border:1px solid #dbe3f0;border-radius:7px;padding:7px 9px;white-space:nowrap;margin:5px 5px 5px 0;background:white;color:#425778}#settings-view [data-project-save]{background:#245de8;border-color:#245de8;color:white}#settings-view input:not([type=checkbox]),#settings-view textarea{border:1px solid #dce4f0;border-radius:6px;padding:8px;max-width:100%;background:#fbfcff}#settings-view td{padding:10px 6px;vertical-align:top;border-bottom:1px solid #edf1f7}#settings-view th{padding:10px 6px;text-align:left;font-size:11px;color:#718098;background:#f0f4fb}#settings-view table{table-layout:fixed}#settings-view th:first-child{width:90px}#settings-view th:nth-child(4){width:76px}#settings-view th:last-child{width:76px}#settings-view [data-auto-setting]{display:flex;align-items:center;gap:8px;padding:14px;background:#edf3ff;border-radius:10px;margin:16px 0;color:#245de8}
+#settings-view h2{font-size:21px;margin:0 0 6px}#settings-view p{color:#718098}#settings-view button{border:1px solid #dbe3f0;border-radius:7px;padding:7px 9px;white-space:nowrap;margin:5px 5px 5px 0;background:white;color:#425778}#settings-view [data-project-save]{background:#245de8;border-color:#245de8;color:white}#settings-view input:not([type=checkbox]),#settings-view textarea{border:1px solid #dce4f0;border-radius:6px;padding:8px;max-width:100%;background:#fbfcff}#settings-view td{padding:10px 6px;vertical-align:top;border-bottom:1px solid #edf1f7}#settings-view th{padding:10px 6px;text-align:left;font-size:11px;color:#718098;background:#f0f4fb}#settings-view table{table-layout:fixed}#settings-view th:first-child{width:90px}#settings-view th:nth-child(4){width:64px}#settings-view th:nth-child(5){width:70px}#settings-view th:last-child{width:76px}#settings-view [data-auto-setting]{display:flex;align-items:center;gap:8px;padding:14px;background:#edf3ff;border-radius:10px;margin:16px 0;color:#245de8}
 `;root.append(style);
 function el(tag,text,parent=root){const n=document.createElement(tag);if(text)n.textContent=text;parent.append(n);return n;}
 const launcher=el('button');launcher.id='launcher';launcher.title='点击打开 · 拖动移动位置';el('span','✦',launcher).style.cssText='font-size:19px;line-height:1';el('span','Jira Monitor',launcher);
@@ -43,23 +43,23 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.5.1',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.6.0',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
-const timeoutTab=el('button','◷  超时预警',nav),sprintTab=el('button','▥  Sprint Analysis',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';config.id='nav-settings';
-const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';sprint.hidden=settings.hidden=true;
+const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
+const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content),epic=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';epic.id='epic-view';epic.hidden=sprint.hidden=settings.hidden=true;
 const grip=el('div',null,shell);grip.id='resize-grip';grip.setAttribute('aria-label','拖动调整窗口大小');
 const detail=el('div');detail.id='detail-popup';detail.hidden=true;const detailHeader=el('div',null,detail);detailHeader.id='detail-header';el('strong','◷  详情分析',detailHeader);el('span','独立浮窗',detailHeader);const detailClose=el('button','❌',detailHeader);detailClose.id='detail-close';detailClose.setAttribute('aria-label','关闭详情分析');const detailContent=el('div',null,detail);detailContent.id='detail-content';
 let geometry=GM_getValue('jira-monitor-window-v1',{}),activeView='timeout',dismissedDetail='';
 function fit(g){const maxW=Math.max(1,innerWidth-24),maxH=Math.max(1,innerHeight-24);const width=Math.max(Math.min(620,maxW),Math.min(Number(g.width)||960,maxW)),height=Math.max(Math.min(360,maxH),Math.min(Number(g.height)||620,maxH));return {width,height,left:Math.max(12,Math.min(Number.isFinite(g.left)?g.left:(innerWidth-width)/2,innerWidth-width-12)),top:Math.max(12,Math.min(Number.isFinite(g.top)?g.top:(innerHeight-height)/2,innerHeight-height-12))};}
 function layout(){geometry=fit(geometry);Object.assign(shell.style,{width:geometry.width+'px',height:geometry.height+'px',left:geometry.left+'px',top:geometry.top+'px'});}layout();
 function drag(node,resizing){node.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;e.preventDefault();const start={...geometry},x=e.clientX,y=e.clientY;node.setPointerCapture?.(e.pointerId);const move=event=>{geometry=resizing?{...start,width:start.width+event.clientX-x,height:start.height+event.clientY-y}:{...start,left:start.left+event.clientX-x,top:start.top+event.clientY-y};layout();};const end=()=>{node.removeEventListener('pointermove',move);node.removeEventListener('pointerup',end);node.removeEventListener('pointercancel',end);GM_setValue('jira-monitor-window-v1',geometry);};node.addEventListener('pointermove',move);node.addEventListener('pointerup',end);node.addEventListener('pointercancel',end);});}drag(header,false);drag(grip,true);addEventListener('resize',layout);
-const hub={timeout,sprint,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
- show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
+const hub={timeout,sprint,epic,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
+ show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';epic.hidden=which!=='epic';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[epicTab,'epic'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
  hide(){shell.hidden=true;launcher.focus();},syncRoute(){if(/^\/browse\//i.test(location.pathname)&&activeView==='timeout')shell.hidden=true;},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
  openDetail(){dismissedDetail='';hub.syncDetail();},setAuto(value){hub.autoDetail=value;GM_setValue('jira-monitor-auto-detail',value);if(value){dismissedDetail='';hub.startDetail?.();}else hub.stopDetail?.();hub.syncDetail();},
  refreshSettings(){hub.configure?.();}};
-launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
+launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');epicTab.onclick=()=>hub.show('epic');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
 root.addEventListener('keydown',e=>{if(e.key==='Escape')hub.hide();});
 if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
   function validateTeamsUrl(value){
@@ -108,11 +108,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.5.1 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.6.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.5.1 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.6.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -158,23 +158,24 @@ function initTimeout(detailOnly){
   const PROJECT_SETTING='jira-monitor-projects-v1';
   const projectKeyOf=key=>String(key||'').trim().match(/^([A-Z][A-Z0-9_]*)-\d+$/i)?.[1]?.toUpperCase()||'';
   function projectConfigs(){if(typeof GM_getValue!=='function')return [];const data=GM_getValue(PROJECT_SETTING,[]);if(!Array.isArray(data))throw Error('项目配置格式无效，请打开配置中心');return data;}
-  function projectTarget(key){const projectKey=projectKeyOf(key);const rows=projectConfigs().filter(r=>r.projectKey===projectKey);if(rows.length>1)throw Error(projectKey+' 项目配置重复');return rows[0]?{...rows[0],projectKey}:null;}
+  function projectTarget(key){const projectKey=projectKeyOf(key);const rows=projectConfigs().filter(r=>r.projectKey===projectKey);if(rows.length>1)throw Error(projectKey+' 项目配置重复');return rows[0]&&rows[0].enabled!==false?{...rows[0],projectKey}:null;}
   function configureCenter(){
     hub.show('settings');hub.settings.replaceChildren();const overlay={remove:()=>hub.show('timeout')},box=hub.settings;
     const add=(tag,text,attr,parent=box)=>{const x=document.createElement(tag);if(text)x.textContent=text;if(attr)x.setAttribute(attr,'');parent.append(x);return x;};
     add('h2','配置中心');
     const autoLabel=add('label',null,'data-auto-setting'),auto=add('input',null,'data-auto-detail',autoLabel);auto.type='checkbox';auto.checked=hub.autoDetail;add('span','详情自动分析 · 在 Jira 详情页右下角独立弹出',null,autoLabel);auto.onchange=()=>hub.setAuto(auto.checked);
 
-    add('p','项目 Key 取工单编号横杠前的值，如 CSP-3909 → CSP。未配置项目只统计、不发送；邮件通过该项目 Webhook 对应工作流发送。');
+    add('p','项目 Key 取工单编号横杠前的值，如 CSP-3909 → CSP。未配置或未启用的项目只统计、不发送；可同时启用多个项目；邮件通过该项目 Webhook 对应工作流发送。');
     const table=add('table',null,'data-project-table');table.style.cssText='width:100%;border-collapse:collapse';
-    const head=add('tr',null,null,table);for(const label of ['项目 Key','Teams Webhook','Email 收件人（多个用分号）','批量自动通知','操作'])add('th',label,null,head);
+    const head=add('tr',null,null,table);for(const label of ['项目 Key','Teams Webhook','Email 收件人（多个用分号）','启用通知','批量自动通知','操作'])add('th',label,null,head);
     const rows=[];
     function row(value={}){
       const tr=add('tr',null,'data-project-row',table),key=add('input',null,'data-project-key',add('td',null,null,tr));key.value=value.projectKey||'';key.style.width='85px';
       const webhook=add('textarea',null,'data-project-hook',add('td',null,null,tr));webhook.value=value.webhook||'';webhook.rows=3;webhook.style.width='95%';
       const emails=add('textarea',null,'data-project-emails',add('td',null,null,tr));emails.value=(value.recipients||[]).join(';');emails.rows=3;emails.style.width='95%';
+      const enabled=add('input',null,'data-project-enabled',add('td',null,null,tr));enabled.type='checkbox';enabled.checked=value.enabled!==false;enabled.setAttribute('aria-label','启用项目通知');
       const auto=add('input',null,'data-project-auto',add('td',null,null,tr));auto.type='checkbox';auto.checked=value.autoNotify===true;
-      const remove=add('button','删除',null,add('td',null,null,tr)),entry={tr,key,webhook,emails,auto,deleted:false};rows.push(entry);remove.onclick=()=>{entry.deleted=true;tr.hidden=true;};return entry;
+      const remove=add('button','删除',null,add('td',null,null,tr)),entry={tr,key,webhook,emails,enabled,auto,deleted:false};rows.push(entry);remove.onclick=()=>{entry.deleted=true;tr.hidden=true;};return entry;
     }
     const stored=projectConfigs();if(stored.length)stored.forEach(row);else{row({projectKey:'CSP'});row({projectKey:'OSPIT'});}
     add('button','新增项目','data-project-add').onclick=()=>row();
@@ -195,7 +196,7 @@ function initTimeout(detailOnly){
         if(seen.has(key))throw Error('项目 Key 重复：'+key);seen.add(key);
         if(webhook&&!supportedWebhook(webhook))throw Error(key+' Webhook 地址不支持');
         if((r.auto.checked||recipients.length)&&!webhook)throw Error(key+' 自动通知/邮件需要配置 Webhook');
-        result.push({projectKey:key,webhook,recipients,autoNotify:r.auto.checked});
+        result.push({projectKey:key,webhook,recipients,autoNotify:r.auto.checked,enabled:r.enabled.checked});
       }
       GM_setValue(PROJECT_SETTING,result);if(JSON.stringify(GM_getValue(PROJECT_SETTING,null))!==JSON.stringify(result))throw Error('存储回读失败');
       render();status.style.color='#00875a';status.textContent='已保存并验证 '+result.length+' 个项目，本页立即生效';
@@ -404,7 +405,7 @@ function initTimeout(detailOnly){
   panel.style.cssText='box-sizing:border-box;position:relative;width:100%;height:min(520px,75vh);max-height:75vh;overflow:hidden;z-index:2147483647;background:#fff;color:#172b4d;border:2px solid #0052cc;border-radius:8px;padding:14px;box-shadow:0 4px 24px #0004;font:13px Arial';
   // 使用 DOM 构建，避免站点 Trusted Types 策略拒绝 innerHTML。
   const make=(tag,text,attr,parent)=>{const x=document.createElement(tag);if(text)x.textContent=text;if(attr)x.setAttribute(attr,'');parent.append(x);return x;};
-  make('b','超时预警',null,panel);
+  make('b','COE · 超时预警',null,panel);
   const fold=make('button','收起','data-fold',panel);fold.style.float='right';
   const body=make('div',null,'data-body',panel);
   body.style.cssText='display:flex;flex-direction:column;height:calc(100% - 24px);min-height:0';
@@ -1006,7 +1007,7 @@ function initTimeout(detailOnly){
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
   if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.5.1 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.6.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1194,7 +1195,7 @@ initTimeout();initTimeout(true);
   const root=host.attachShadow({mode:'open'});
   root.innerHTML=`<style>
   :host{all:initial;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b4d}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d;padding:7px 12px}button:hover{background:#edf3ff}.primary:hover,#launch:hover{background:#0747a6}#close{white-space:nowrap}button:disabled{opacity:.5;cursor:wait}.primary,#launch{background:#0052cc;color:white;border-color:#0052cc}#launch{position:fixed;right:24px;bottom:24px;z-index:2147483646;box-shadow:0 5px 20px #091e4240}#overlay{position:fixed;inset:0;background:#091e4260;z-index:2147483647;padding:3vh 3vw;display:none}#panel{background:#f7f9fc;border-radius:14px;max-width:1280px;margin:auto;height:94vh;overflow:auto;box-shadow:0 20px 80px #091e4255;padding:24px}header{display:flex;align-items:center;justify-content:space-between}h1{font-size:24px;margin:0}h2{font-size:17px;margin:0 0 12px}.muted{color:#5e6c84}p{margin:8px 0}.controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap;margin:18px 0}label{display:flex;flex-direction:column;gap:5px}input,select{border:1px solid #b3bfd0;border-radius:5px;padding:7px;background:white;color:#172b4d}fieldset{margin:0;border:1px solid #b3bfd0;border-radius:6px;padding:8px;background:white;min-width:280px;max-width:100%}.choices{height:140px;overflow:auto;max-width:430px}.choices label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:3px;cursor:pointer}.choices input{margin:0}.tools{display:flex;gap:8px;margin-bottom:5px}.tools button{padding:2px 8px}legend{padding:0 5px}.card{overflow-x:auto;background:white;border:1px solid #dfe5ed;border-radius:9px;margin:16px 0;padding:18px}.notice{padding:10px 14px;background:#eaf1ff;border-radius:6px}#message{white-space:pre-wrap}#message.error{background:#fff0ed;color:#ae2a19;padding:12px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid #e8ecf2;padding:9px 10px}th{background:#f4f6fa;color:#5e6c84}td button{border:0;padding:0;color:#0052cc;background:none;text-decoration:underline}.delta{font-variant-numeric:tabular-nums;font-weight:600}a{color:#0052cc}#detail{overflow:auto}small{font-size:12px}@media(max-width:650px){#panel{padding:14px}.controls{display:block}label{margin:10px 0}#sprints{min-width:0;width:100%}th,td{padding:6px}h1{font-size:20px}}
-  </style><button id="launch">◷ Sprint Analysis v0.1.9</button><div id="overlay"><section id="panel" role="dialog" aria-modal="true" aria-label="Sprint Analysis"><header><div><h1>Sprint Analysis <small class="muted">v0.1.9</small></h1><p class="muted"><span id="period-description"></span> · Asia/Shanghai（UTC+08:00）</p></div><button id="close" aria-label="关闭">关闭</button></header>
+  </style><button id="launch">◷ Sprint Analysis v0.1.9</button><div id="overlay"><section id="panel" role="dialog" aria-modal="true" aria-label="Sprint Analysis"><header><div><h1>Sprint <small class="muted">v0.1.9</small></h1><p class="muted"><span id="period-description"></span> · Asia/Shanghai（UTC+08:00）</p></div><button id="close" aria-label="关闭">关闭</button></header>
   <div class="notice">口径：以本次查询匹配的成员回溯对比时点的状态；不还原历史 Sprint 成员或历史筛选条件。已关闭 Sprint 也可能保留在任务 Sprint 字段中；同一任务可出现在多个 Sprint，各 Sprint 不可直接相加。</div>
   <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Sprint（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 14 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><button id="report-export" disabled>导出交互报告</button><label class="report-option"><input id="attach-report" type="checkbox" checked>邮件附交互报告（含 Jira 明细）</label><fieldset id="notify-box"><legend>推送项目（可多选）</legend><div id="notify-project" role="group" aria-label="推送项目（可多选）"></div></fieldset><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
   <p class="muted">统计当前页面查询的全部分页，不扩大到整个 Sprint。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。</p><p id="message" role="status">点击“载入当前页面”读取全部结果；本工具只读取 Jira，不修改任务。</p><div id="results"></div><div id="detail"></div></section></div>`;
@@ -1325,7 +1326,7 @@ initTimeout();initTimeout(true);
     reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜当前页面全部分页｜JQL：${jql}｜所选 Sprint：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯`;
     reportJiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql});
     reportIssues=scoped;reportIds=ids;reportStatuses=statusIds;reportNow=now;
-    groups=calculated;const picker=$('notify-project');picker.replaceChildren();for(const key of [...new Set(scoped.map(i=>i.key.split('-')[0].toUpperCase()))].sort()){const label=text('label','',picker);const input=document.createElement('input');input.type='checkbox';input.value=key;input.checked=true;label.append(input,document.createTextNode(key));}render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Sprint 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Sprint 分组。合计仅包含所选状态。`);
+    groups=calculated;const picker=$('notify-project');picker.replaceChildren();for(const key of [...new Set(scoped.map(i=>i.key.split('-')[0].toUpperCase()))].sort()){const label=text('label','',picker);const input=document.createElement('input');input.type='checkbox';input.value=key;input.checked=hub.target(key+'-1')!==null;input.disabled=hub.projects().some(p=>p.projectKey===key&&p.enabled===false);if(input.disabled)label.title='项目通知已停用，请在配置中心启用';label.append(input,document.createTextNode(key));}render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Sprint 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Sprint 分组。合计仅包含所选状态。`);
   }
 // Self-contained snapshot: no Jira API, authentication tokens, or external assets.
 function buildInteractiveReport(model){
@@ -1387,7 +1388,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
       // Freeze each project's report and destination before displaying the confirmation.
       const deliveries=keys.map(projectKey=>{
         const configured=hub.target(projectKey+'-1');
-        if(!configured?.webhook)throw Error(projectKey+' 未配置 Webhook，请先在配置中心保存。未发送任何消息。');
+        if(!configured?.webhook)throw Error(projectKey+' 通知未启用或未配置 Webhook，请先在配置中心保存。未发送任何消息。');
         const target={...configured,recipients:[...(configured.recipients||[])]},destination=validateTeamsUrl(target.webhook);
         const projectIssues=reportIssues.filter(i=>i.key.split('-')[0].toUpperCase()===projectKey);
         if(!projectIssues.length)throw Error(projectKey+' 在本次报告中没有任务，请重新分析。');
@@ -1426,6 +1427,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         teamsSending=true;send.disabled=true;cancel.disabled=true;
         const outcomes=[];
         for(const item of deliveries){
+          if(!hub.target(item.projectKey+'-1')){outcomes.push(item.projectKey+'：通知已停用，跳过');continue;}
           status.textContent=[...outcomes,item.projectKey+'：正在提交…'].join('\n');
           const outcome=await new Promise(resolve=>{
             let settled=false,request;
@@ -1461,6 +1463,474 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     const rows=[['统计说明',reportMeta],['Sprint ID','Sprint','状态',activePeriod.before,activePeriod.after,'增减',activePeriod.rate]];
     for(const g of groups){const stats=rowsWithTotal(g);for(const r of stats)rows.push([g.id,g.name,r.name,r.before.length,r.after.length,r.after.length-r.before.length,rate(r.before.length,r.after.length)]);}
     const blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='jira-sprint-analysis-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+})();
+
+(function () {
+  'use strict';
+  const NONE = '∅';
+  const STATUS_NAMES=["New", "Grooming", "Open", "In Progress", "Ready For Test", "Testing", "Completed", "SIT", "Ready For UAT", "UAT", "Ready For Deploy", "DEPLOYED", "Done", "Cancelled"];
+  const normalized=name=>String(name||'').trim().replace(/\s+/g,' ').toLowerCase();
+  function comparisonPeriod(now,mode='day'){
+    const day=86400000,offset=8*3600000;
+    const date=t=>new Date(t+offset).toISOString().slice(0,10);
+    const midnight=Date.parse(date(now)+'T00:00:00+08:00');
+    if(mode==='week'){
+      const weekday=new Date(midnight+offset).getUTCDay();
+      const monday=midnight-((weekday+6)%7)*day;
+      return {cutoff:monday,before:'上周日终',after:'本周截至当前',rate:'周环比',created:'本周创建',
+        description:`By week｜上周 ${date(monday-7*day)}～${date(monday-day)}（周日结束时） → 本周 ${date(monday)}～${date(monday+6*day)}（截至当前，未满周）`};
+    }
+    return {cutoff:midnight,before:'昨日日终',after:'今日截至当前',rate:'日环比',created:'今日创建',
+      description:`By day｜昨日 ${date(midnight-day)}（日终） → 今日 ${date(now)}（截至当前）`};
+  }
+  function selectStatusGroups(source,selection){
+    const names=selection===null?STATUS_NAMES:STATUS_NAMES.filter(n=>selection.includes(normalized(n)));
+    const allowed=new Map(names.map(n=>[normalized(n),n]));
+    return source.map(g=>{
+      const rows=new Map();
+      for(const row of g.rows.values()){
+        const key=normalized(row.name);if(!allowed.has(key))continue;
+        if(!rows.has(key))rows.set(key,{id:key,name:allowed.get(key),before:[],after:[]});
+        rows.get(key).before.push(...row.before);rows.get(key).after.push(...row.after);
+      }
+      if(selection!==null)for(const [id,name] of allowed)if(!rows.has(id))rows.set(id,{id,name,before:[],after:[]});
+      return {...g,rows,issues:g.issues.filter(x=>allowed.has(normalized(x.before?.name))||allowed.has(normalized(x.after?.name)))};
+    });
+  }
+  // Epic membership uses the current Epic Link (or parent on newer Jira instances).
+  const epicNames=new Map();
+  function isStory(issue){return /^(story|用户故事|故事)$/i.test(String(issue.fields?.issuetype?.name||'').trim())&&issue.fields?.issuetype?.subtask!==true;}
+  function sprints(value){
+    if(value==null||value==='')return [];
+    const values=Array.isArray(value)?value:[value];
+    return values.map(v=>{
+      const key=String(typeof v==='object'?v?.key||'':v).trim().toUpperCase();
+      if(!/^[A-Z][A-Z0-9_]*-\d+$/.test(key))throw Error('无法识别 Epic 关联编号，请检查 Epic Link / parent 字段。');
+      return {id:key,name:epicNames.get(key)||key,state:''};
+    });
+  }
+  async function loadEpicNames(issues){
+    const keys=[...new Set(issues.flatMap(i=>sprints(i.fields[field]).map(x=>x.id)))];
+    // Restrict lookup to observed Epic keys; never broaden the user's Story query.
+    for(let offset=0;offset<keys.length;offset+=100){
+      const subset=keys.slice(offset,offset+100),params=new URLSearchParams({jql:'key in ('+subset.join(',')+')',fields:'summary,issuetype',maxResults:'100'});
+      const data=await api('/rest/api/2/search?'+params);
+      if(!Array.isArray(data.issues))throw Error('Epic 名称查询响应无效，请重试。');
+      for(const issue of data.issues)epicNames.set(issue.key,issue.key+' · '+(issue.fields.summary||''));
+    }
+  }
+  function statusAt(issue, cutoff, inclusive = true) {
+    const created = Date.parse(issue.fields.created);
+    if (!Number.isFinite(created)) throw new Error(`${issue.key}: 创建时间无效`);
+    if (inclusive ? created > cutoff : created >= cutoff) return null;
+    let status = { id: String(issue.fields.status.id), name: issue.fields.status.name };
+    const histories = [...issue.changelog.histories].sort((a,b) => Date.parse(b.created)-Date.parse(a.created) || Number(b.id)-Number(a.id));
+    for (const h of histories) {
+      const time = Date.parse(h.created);
+      if (!Number.isFinite(time)) throw new Error(`${issue.key}: 变更时间无效`);
+      if (inclusive ? time <= cutoff : time < cutoff) continue;
+      for (const item of [...h.items].reverse()) {
+        if (item.field === 'status' || item.fieldId === 'status') {
+          if (item.from == null || !item.fromString) throw new Error(`${issue.key}: 状态历史不完整`);
+          status = { id: String(item.from), name: item.fromString };
+        }
+      }
+    }
+    return status;
+  }
+  function rate(a,b) { return a === 0 ? (b === 0 ? '—' : '新增') : `${((b-a)/a*100).toFixed(1)}%`; }
+  function aggregate(issues, field, selected, cutoff, now) {
+    const groups = new Map();
+    for (const issue of issues) {
+      const memberships = sprints(issue.fields[field]);
+      const ids = memberships.length ? [...new Set(memberships.map(s=>s.id))] : [NONE];
+      const before = statusAt(issue, cutoff, false), after = statusAt(issue, now);
+      for (const id of ids.filter(id=>selected.includes(id))) {
+        if (!groups.has(id)) groups.set(id, {id, name: memberships.find(s=>s.id===id)?.name || '未分配 Epic', rows:new Map(), issues:[]});
+        const g=groups.get(id);
+        for (const [side,status] of [['before',before],['after',after]]) {
+          if (!status) continue;
+          if (!g.rows.has(status.id)) g.rows.set(status.id,{id:status.id,name:status.name,before:[],after:[]});
+          g.rows.get(status.id)[side].push(issue);
+        }
+        g.issues.push({issue,before,after,changed:before?.id!==after?.id});
+      }
+    }
+    return [...groups.values()];
+  }
+  function matchesEpic(issue,field,ids){
+    const list=sprints(issue.fields[field]);
+    return list.length ? list.some(x=>ids.includes(x.id)) : ids.includes(NONE);
+  }
+  function filterGroups(source,statusIds){
+    if(statusIds===null)return source;
+    const allowed=new Set(statusIds);
+    return source.map(g=>({...g,rows:new Map([...g.rows].filter(([id])=>allowed.has(id))),
+      issues:g.issues.filter(x=>allowed.has(x.before?.id)||allowed.has(x.after?.id))}));
+  }
+  function rowsWithTotal(g){
+    const rows=[...g.rows.values()].sort((a,b)=>(STATUS_NAMES.findIndex(n=>normalized(n)===normalized(a.name))+1||STATUS_NAMES.length+1)-(STATUS_NAMES.findIndex(n=>normalized(n)===normalized(b.name))+1||STATUS_NAMES.length+1)||a.name.localeCompare(b.name));
+    return [...rows,{name:'所选状态合计',before:rows.flatMap(r=>r.before),after:rows.flatMap(r=>r.after)}];
+  }
+  function csvCell(v) { let s=String(v ?? ''); if (/^[\s]*[=+\-@]/.test(s)) s="'"+s; return '"'+s.replaceAll('"','""')+'"'; }
+  function pageQuery(doc, href) {
+    const url = new URL(href);
+    // The visible advanced search editor takes precedence over an old saved-filter ID.
+    for (const selector of ['#jqltextarea', 'textarea[name="jqlQuery"]', 'input[name="jql"]']) {
+      const el = doc.querySelector(selector);
+      let visible=!!el;
+      for(let node=el;node && visible;node=node.parentElement){
+        const style=doc.defaultView?.getComputedStyle(node);
+        if(node.hidden || node.getAttribute('aria-hidden')==='true' || style?.display==='none' || style?.visibility==='hidden')visible=false;
+      }
+      if (visible && el.value?.trim() && !el.disabled) {
+        return {jql:el.value.trim(), source:'当前页面 JQL'};
+      }
+    }
+    const jql=url.searchParams.get('jql');
+    if(jql?.trim()) return {jql:jql.trim(),source:'当前页面 URL JQL'};
+    const key=/\/browse\/([A-Z][A-Z0-9_]*-\d+)/i.exec(url.pathname)?.[1];
+    if(key) return {jql:'key = "'+key+'"',source:'当前任务页面'};
+    const filter=url.searchParams.get('filter');
+    if(filter && /^\d+$/.test(filter)) return {filter,source:'当前页面查询（从页面筛选器解析）'};
+    throw new Error('无法识别当前页面的查询条件。请在 Jira 问题列表点击 Search，或切换 Advanced 后重新载入。');
+  }
+  function validateTeamsUrl(value){
+    let u;try{u=new URL(String(value).trim().replace(/\\&/g,'&').replace(/&amp;/g,'&'));}catch{throw new Error('请输入有效的 Teams Workflows HTTPS Webhook 地址。');}
+    const allowed=['logic.azure.com','api.powerplatform.com','api.powerautomate.com'];
+    if(u.protocol!=='https:'||u.username||u.password||u.hash||u.port||!allowed.some(h=>u.hostname.endsWith('.'+h))||!u.pathname.includes('/workflows/'))throw new Error('仅支持微软 Teams Workflows 的 HTTPS 地址（logic.azure.com / api.powerplatform.com / api.powerautomate.com），不支持旧版 Connector。');
+    return u.href;
+  }
+  function teamsResponseInfo(response={}){
+    const parts=[];
+    if(Number.isFinite(response.status))parts.push('HTTP '+response.status);
+    if(Number.isFinite(response.readyState))parts.push('readyState '+response.readyState);
+    let code='';try{code=JSON.parse(response.responseText||'{}').error?.code||'';}catch{}
+    if(/^[A-Za-z0-9_.-]{1,100}$/.test(code))parts.push(code);
+    const raw=String(response.error||response.message||'');
+    const network=/\b(?:net::)?ERR_[A-Z0-9_]+\b/.exec(raw)?.[0];if(network)parts.push(network);
+    if(/not permitted|not allowed|refused to connect|whitelist|blocked by.*user/i.test(raw))parts.push('油猴连接授权被拒绝，请检查脚本设置中的用户域名白名单');
+    // Do not include raw error strings, response bodies or URLs: they may contain the webhook signature.
+    return parts.join('；')||'浏览器/扩展未提供 HTTP 响应';
+  }
+  function buildTeamsReport(groups,meta,period,jiraUrl){
+    const block=(value,extra={})=>({type:'TextBlock',text:String(value),wrap:true,...extra});
+    const columns=(values,header=false)=>({type:'ColumnSet',spacing:'Medium',separator:!header,columns:values.map((value,i)=>({
+      type:'Column',width:['stretch','42px','42px','50px','64px'][i],spacing:'Small',items:[{type:'TextBlock',text:String(value),...(i?{horizontalAlignment:'Center'}:{wrap:true,horizontalAlignment:'Left'}),...(header?{weight:'Bolder'}:{})}]
+    }))});
+    const heading=['状态',period.before==='上周日终'?'上周末':'昨日',period.after==='本周截至当前'?'本周':'今日','增减',period.rate];
+    const generated=meta.split('｜')[0].trim();
+    const body=[block('Epic Analysis',{size:'Large',weight:'Bolder',color:'Accent'}),
+      block(period.description,{size:'Small'}),block(generated,{size:'Small',isSubtle:true,spacing:'Small'})];
+    const sections=[];
+    for(const g of groups){
+      const rows=rowsWithTotal(g),total=rows.at(-1),changes=g.issues.filter(x=>x.changed).length,created=g.issues.filter(x=>!x.before&&x.after).length;
+      const model={name:g.name,id:g.id,changes,created,rows:rows.map(r=>{const a=r.before.length,b=r.after.length,d=b-a;return [r.name,String(a),String(b),(d>0?'+':'')+d,rate(a,b)];})};sections.push(model);
+      const metrics=[['当前数量',total.after.length],['净状态变化',changes],[period.created,created]];
+      const items=[block(g.name,{size:'Medium',weight:'Bolder'}),block('Epic #'+g.id,{size:'Small',isSubtle:true,spacing:'None'}),
+        {type:'ColumnSet',columns:metrics.map(([label,value])=>({type:'Column',width:1,items:[block(value,{size:'Large',weight:'Bolder',color:'Accent',horizontalAlignment:'Center'}),block(label,{size:'Small',isSubtle:true,spacing:'None',horizontalAlignment:'Center'})]}))},
+        columns(heading,true)];
+      for(let i=0;i<model.rows.length;i++){
+        const values=model.rows[i],isTotal=i===model.rows.length-1,row=columns(values,isTotal);row.separator=true;
+        if(values[3]!=='0')row.columns[3].items[0].color=Number(values[3])>0?'Attention':'Accent';
+        items.push(row);
+      }
+      body.push({type:'Container',separator:true,spacing:'Large',items});
+    }
+    body.push(block('当前成员回溯 · 仅统计所选状态 · 数量增减不代表好坏',{size:'Small',isSubtle:true,separator:true}),
+      {type:'Container',id:'analysis-details',isVisible:false,items:[block(meta,{size:'Small',isSubtle:true})]});
+    const payload={type:'message',attachments:[{contentType:'application/vnd.microsoft.card.adaptive',contentUrl:null,content:{$schema:'http://adaptivecards.io/schemas/adaptive-card.json',type:'AdaptiveCard',version:'1.2',msteams:{width:'Full'},body,actions:[
+      {type:'Action.OpenUrl',title:'打开 Jira 查询',url:jiraUrl},{type:'Action.ToggleVisibility',title:'统计口径与查询条件',targetElements:['analysis-details']}
+    ]}}]};
+    return {payload,sections,heading,generated,meta,description:period.description,jiraUrl,period};
+  }
+  const core = {sprints,statusAt,rate,aggregate,csvCell,pageQuery,matchesEpic,filterGroups,rowsWithTotal,STATUS_NAMES,normalized,comparisonPeriod,selectStatusGroups,validateTeamsUrl,buildTeamsReport,teamsResponseInfo};
+  if (typeof window === 'undefined' && typeof module === 'object' && module.exports) { module.exports = core; return; }
+  // An older duplicate userscript may run first. Replace its panel rather than silently exiting.
+  const existing=document.getElementById('jea-host');
+  if(existing){
+    const previous=existing.dataset.jsaVersion||existing.shadowRoot?.querySelector('h1 small')?.textContent?.replace(/^v/,'')||'0.0.0';
+    const parts=v=>v.split('.').map(Number),a=parts(previous),b=parts('0.1.9');
+    const comparison=a.reduce((r,n,i)=>r||n-(b[i]||0),0);
+    if(comparison>=0)return;
+    existing.remove();
+  }
+  const host=document.createElement('div'); host.id='jea-host';host.dataset.jsaVersion='0.1.9'; hub.epic.append(host);
+  const root=host.attachShadow({mode:'open'});
+  root.innerHTML=`<style>
+  :host{all:initial;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b4d}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #c9d3e0;border-radius:6px;background:white;color:#172b4d;padding:7px 12px}button:hover{background:#edf3ff}.primary:hover,#launch:hover{background:#0747a6}#close{white-space:nowrap}button:disabled{opacity:.5;cursor:wait}.primary,#launch{background:#0052cc;color:white;border-color:#0052cc}#launch{position:fixed;right:24px;bottom:24px;z-index:2147483646;box-shadow:0 5px 20px #091e4240}#overlay{position:fixed;inset:0;background:#091e4260;z-index:2147483647;padding:3vh 3vw;display:none}#panel{background:#f7f9fc;border-radius:14px;max-width:1280px;margin:auto;height:94vh;overflow:auto;box-shadow:0 20px 80px #091e4255;padding:24px}header{display:flex;align-items:center;justify-content:space-between}h1{font-size:24px;margin:0}h2{font-size:17px;margin:0 0 12px}.muted{color:#5e6c84}p{margin:8px 0}.controls{display:flex;gap:16px;align-items:end;flex-wrap:wrap;margin:18px 0}label{display:flex;flex-direction:column;gap:5px}input,select{border:1px solid #b3bfd0;border-radius:5px;padding:7px;background:white;color:#172b4d}fieldset{margin:0;border:1px solid #b3bfd0;border-radius:6px;padding:8px;background:white;min-width:280px;max-width:100%}.choices{height:140px;overflow:auto;max-width:430px}.choices label{display:flex;flex-direction:row;align-items:center;gap:8px;padding:3px;cursor:pointer}.choices input{margin:0}.tools{display:flex;gap:8px;margin-bottom:5px}.tools button{padding:2px 8px}legend{padding:0 5px}.card{overflow-x:auto;background:white;border:1px solid #dfe5ed;border-radius:9px;margin:16px 0;padding:18px}.notice{padding:10px 14px;background:#eaf1ff;border-radius:6px}#message{white-space:pre-wrap}#message.error{background:#fff0ed;color:#ae2a19;padding:12px}table{width:100%;border-collapse:collapse;margin-top:10px}th,td{text-align:left;border-bottom:1px solid #e8ecf2;padding:9px 10px}th{background:#f4f6fa;color:#5e6c84}td button{border:0;padding:0;color:#0052cc;background:none;text-decoration:underline}.delta{font-variant-numeric:tabular-nums;font-weight:600}a{color:#0052cc}#detail{overflow:auto}small{font-size:12px}@media(max-width:650px){#panel{padding:14px}.controls{display:block}label{margin:10px 0}#sprints{min-width:0;width:100%}th,td{padding:6px}h1{font-size:20px}}
+  </style><button id="launch">◷ Epic Analysis v0.1.9</button><div id="overlay"><section id="panel" role="dialog" aria-modal="true" aria-label="Epic Analysis"><header><div><h1>Epic <small class="muted">v0.1.9</small></h1><p class="muted"><span id="period-description"></span> · Asia/Shanghai（UTC+08:00）</p></div><button id="close" aria-label="关闭">关闭</button></header>
+  <div class="notice">口径：仅统计当前查询范围内的 Story，按当前 Epic 归属分组并回溯对比时点的状态；不还原历史 Epic 归属及历史筛选条件。无 Epic 的 Story 单独分组，不包含 Bug、Task 或子任务。</div>
+  <div class="controls"><label>对比维度<select id="period"><option value="day">By day · 昨天 / 今天</option><option value="week">By week · 上周 / 本周（周一至周日）</option></select></label><button id="load">载入当前页面（全部分页）</button><fieldset id="sprint-box"><legend>Epic（勾选，可多选）</legend><div class="tools"><button id="sprint-all" type="button">全选</button><button id="sprint-none" type="button">清空</button></div><div id="sprints" class="choices"></div></fieldset><fieldset id="status-box"><legend>状态（默认全部，可多选）</legend><label><input type="checkbox" id="status-all" checked>全部指定状态（以下 14 个）</label><p class="muted">直接勾选下面的状态即可切换为指定状态。</p><div id="statuses" class="choices"></div></fieldset><button id="run" class="primary">开始分析</button><button id="export" disabled>导出 CSV</button><button id="report-export" disabled>导出交互报告</button><label class="report-option"><input id="attach-report" type="checkbox" checked>邮件附交互报告（含 Jira 明细）</label><fieldset id="notify-box"><legend>推送项目（可多选）</legend><div id="notify-project" role="group" aria-label="推送项目（可多选）"></div></fieldset><button id="teams-preview" disabled>预览并推送到 Teams</button></div>
+  <p class="muted">统计当前页面查询的全部分页，不扩大到整个 Epic。修改 Jira 搜索条件后请先点击 Search，再重新载入。若页面排除了已解决任务，完成数量也会受限。</p><p id="message" role="status">点击“载入当前页面”读取全部结果；仅统计当前查询内的 Story；Epic 成员按当前归属回溯状态，不还原历史归属。本工具只读取 Jira，不修改任务。</p><div id="results"></div><div id="detail"></div></section></div>`;
+  const teamsDialog=document.createElement('div');teamsDialog.id='teams-dialog';teamsDialog.setAttribute('role','dialog');teamsDialog.setAttribute('aria-modal','true');teamsDialog.style.cssText='display:none;position:fixed;inset:0;background:#091e4280;z-index:2147483647;padding:4vh 4vw;overflow:auto';
+  const teamsBox=document.createElement('section');teamsBox.className='card';teamsBox.style.cssText='max-width:900px;margin:0 auto;padding:24px;max-height:90vh;overflow:auto';teamsDialog.append(teamsBox);root.append(teamsDialog);
+  const $=id=>root.getElementById(id); let reportIssues=[], reportIds=[], reportStatuses=null, reportNow=0; let field, groups=[], busy=false, reportMeta='', loadedQuery='', reportJiraUrl='', activePeriod=comparisonPeriod(Date.now());
+  $('period-description').textContent=activePeriod.description;
+  const message=(s,error=false)=>{ $('message').textContent=s; $('message').className=error?'error':''; };
+  function text(tag,content,parent){const e=document.createElement(tag); e.textContent=content; parent.append(e); return e;}
+  async function api(path) {
+    const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),30000);
+    try {
+      const res=await fetch(path,{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});
+      if (!res.ok) throw new Error(`Jira HTTP ${res.status}：${res.status===401||res.status===403?'请先登录并确认筛选器/任务访问权限。':'请求失败，请稍后重试或检查接口权限。'}`);
+      if (!res.headers.get('content-type')?.includes('application/json')) throw new Error('Jira 返回了登录页或非 JSON 内容，请先登录 Jira 后重试。');
+      return await res.json();
+    } finally {clearTimeout(timeout);}
+  }
+  async function currentQuery(){
+    const query=pageQuery(document,location.href);
+    if(query.jql)return query.jql;
+    const data=await api('/rest/api/2/filter/'+query.filter);
+    if(!data.jql?.trim())throw new Error('当前页面未返回有效的 JQL，请切换 Advanced 后重新载入。');
+    return data.jql.trim();
+  }
+  async function detectField(){
+    if(field)return field;
+    const fields=await api('/rest/api/2/field');
+    const candidates=fields.filter(f=>f.schema?.custom==='com.pyxis.greenhopper.jira:gh-epic-link');
+    if(candidates.length>1)throw Error('无法唯一识别 Epic Link 字段，请联系维护者检查字段定义。');
+    if(candidates.length===1)return field=candidates[0].id;
+    if(fields.some(f=>f.id==='parent'))return field='parent';
+    throw Error('当前 Jira 未提供 Epic Link 或 parent 字段，无法按 Epic 分析。');
+  }
+  async function search(jql){
+    let start=0,total,all=[]; const seen=new Set();
+    do {
+      const params=new URLSearchParams({jql,fields:`summary,status,created,updated,issuetype,parent,${field}`,startAt:String(start),maxResults:'100'});
+      const page=await api('/rest/api/2/search?'+params);
+      if(!Array.isArray(page.issues)||!Number.isFinite(page.total))throw new Error('搜索接口响应格式不支持');
+      if(total!==undefined&&total!==page.total)throw new Error('查询过程中任务数量发生变化，请重试以免分页遗漏。');
+      total=page.total;
+      if(!page.issues.length && start<total)throw new Error('分页提前结束，已停止统计以避免遗漏。');
+      for(const issue of page.issues){if(seen.has(issue.key))throw new Error('分页出现重复任务，请重试。');seen.add(issue.key);all.push(issue);}
+      start+=page.issues.length;message(`读取任务 ${start} / ${total}…`);
+    }while(start<total);
+    return all.filter(isStory);
+  }
+  async function history(issue){
+    const params=new URLSearchParams({fields:`summary,status,created,updated,issuetype,parent,${field}`,expand:'changelog'});
+    const full=await api('/rest/api/2/issue/'+encodeURIComponent(issue.key)+'?'+params);
+    // The issue detail is authoritative. Search-index timestamps can differ or lag.
+    // Never infer an actual user edit from a raw updated-string mismatch.
+    let c=full.changelog;
+    if(!c||!Array.isArray(c.histories)||!Number.isFinite(c.total))throw new Error(`${issue.key} 未返回可验证完整性的变更历史。`);
+    if((c.startAt||0)!==0||c.histories.length!==c.total){
+      let histories=[],start=0,total;
+      do {
+        let p;try{p=await api('/rest/api/2/issue/'+encodeURIComponent(issue.key)+'/changelog?startAt='+start+'&maxResults=100');}catch{throw new Error(`${issue.key} 历史被截断，且服务器不支持完整历史分页；本次结果不生成。`);}
+        const values=p.values||p.histories;
+        if(!Array.isArray(values)||!Number.isFinite(p.total)||(total!==undefined&&p.total!==total)||(!values.length&&start<p.total))throw new Error(`${issue.key} 历史分页不完整，请重试。`);
+        total=p.total;histories.push(...values);start+=values.length;
+      }while(start<total);
+      if(new Set(histories.map(h=>h.id)).size!==total)throw new Error(`${issue.key} 历史分页重复或缺失。`);
+      c=full.changelog={histories,total};
+    }
+    return full;
+  }
+  async function guard(job){
+    if(busy)return;busy=true;const controls=['load','run','sprint-box','status-box','period'];controls.forEach(id=>$(id).disabled=true);$('report-export').disabled=$('export').disabled=true;$('teams-preview').disabled=true;
+    groups=[];$('results').replaceChildren();$('detail').replaceChildren();
+    try{await job();}catch(e){message(e.name==='AbortError'?'请求超过 30 秒，请检查网络或 VPN 后重试。':e.message,true);}finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('report-export').disabled=$('export').disabled=!groups.length;$('teams-preview').disabled=!groups.length;}
+  }
+  function selected(){return [...$('sprints').querySelectorAll('input:checked')].map(o=>o.value);}
+  function selectedStatuses(){return $('status-all').checked?null:[...$('statuses').querySelectorAll('input:checked')].map(o=>o.value);}
+  function choice(parent,id,name,checked){
+    const label=document.createElement('label'), input=document.createElement('input');input.type='checkbox';input.value=id;input.checked=checked;label.append(input,document.createTextNode(name));parent.append(label);
+  }
+  function invalidate(){if(busy)return;groups=[];$('results').replaceChildren();$('detail').replaceChildren();$('report-export').disabled=$('export').disabled=true;$('teams-preview').disabled=true;message(`已选择 ${selected().length} 个 Epic；状态：${$('status-all').checked?'全部':selectedStatuses().length+' 项'}。请点击“开始分析”。`);}
+  $('period').onchange=()=>{$('period-description').textContent=comparisonPeriod(Date.now(),$('period').value).description;invalidate();};
+  $('sprints').onchange=invalidate;
+  $('statuses').onchange=()=>{$('status-all').checked=false;invalidate();};
+  $('status-all').onchange=()=>{for(const x of $('statuses').querySelectorAll('input'))x.checked=false;invalidate();};
+  for(const [id,checked] of [['sprint-all',true],['sprint-none',false]])$(id).onclick=()=>{for(const x of $('sprints').querySelectorAll('input'))x.checked=checked;invalidate();};
+  async function load(){
+    loadedQuery='';$('sprints').replaceChildren();
+    await detectField();const query=await currentQuery(), issues=await search(query), map=new Map();
+    await loadEpicNames(issues);
+    for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:'未分配 Epic',state:''});for(const s of list)map.set(s.id,s);}
+    $('sprints').replaceChildren();
+    const options=[...map.values()].sort((a,b)=>(/active/i.test(b.state)?1:0)-(/active/i.test(a.state)?1:0)||b.name.localeCompare(a.name));
+    for(const s of options)choice($('sprints'),s.id,`${s.name}${s.state?' · '+s.state:''} [${s.id}]`,true);
+    if(!selected().length&&$('sprints').querySelector('input'))$('sprints').querySelector('input').checked=true;
+    $('statuses').replaceChildren();$('status-all').checked=true;
+    for(const name of STATUS_NAMES)choice($('statuses'),normalized(name),name,false);
+    loadedQuery=query;
+    message(`已读取当前页面全部 ${issues.length} 条任务、${options.length} 个 Epic 分组。可多选后分析。\nJQL：${loadedQuery}${issues.length?'':'（当前页面没有可见任务）'}`);
+  }
+  function details(title,items){
+    const box=$('detail');box.replaceChildren();box.className='card';text('h2',title,box);
+    const table=document.createElement('table');box.append(table);const tr=document.createElement('tr');table.append(tr);['Issue','摘要',activePeriod.before+' → '+activePeriod.after].forEach(h=>text('th',h,tr));
+    for(const x of items){const row=document.createElement('tr');table.append(row);const td=document.createElement('td');row.append(td);const a=text('a',x.issue.key,td);a.href='/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';text('td',x.issue.fields.summary,row);text('td',`${x.before?.name||'尚未创建'} → ${x.after?.name||'尚未创建'}`,row);}
+    if(!items.length)text('p','没有对应任务。',box);
+    box.scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+  function render(){
+    const result=$('results');result.replaceChildren();text('p',reportMeta,result);
+    for(const g of groups){
+      const card=document.createElement('section');card.className='card';result.append(card);text('h2',g.name,card);
+      const changes=g.issues.filter(x=>x.changed), created=g.issues.filter(x=>!x.before&&x.after);
+      const detail=text('button',`查看变化 ${changes.length} 条（${activePeriod.created} ${created.length} 条）`,card);detail.onclick=()=>details(g.name+' · 净状态变化 / 新建任务',changes);
+      const table=document.createElement('table');card.append(table);const head=document.createElement('tr');table.append(head);['状态',activePeriod.before,activePeriod.after,'增减',activePeriod.rate].forEach(h=>text('th',h,head));
+      const rows=rowsWithTotal(g);
+      for(const r of rows){const tr=document.createElement('tr');table.append(tr);text('td',r.name,tr);for(const side of ['before','after']){const td=document.createElement('td');tr.append(td);const b=text('button',String(r[side].length),td);b.onclick=()=>{const keys=new Set(r[side].map(i=>i.key));details(`${g.name} · ${r.name} · ${side==='before'?activePeriod.before:activePeriod.after}`,g.issues.filter(x=>keys.has(x.issue.key)));};}const delta=r.after.length-r.before.length;text('td',(delta>0?'+':'')+delta,tr).className='delta';text('td',rate(r.before.length,r.after.length),tr);}
+    }
+  }
+  async function run(){
+    const ids=selected();if(!ids.length)throw new Error('请先载入并选择 Epic。');await detectField();
+    const statusIds=selectedStatuses();if(statusIds!==null&&!statusIds.length)throw new Error('请至少选择一个状态，或勾选全部状态。');
+    const jql=await currentQuery();
+    if(jql!==loadedQuery)throw new Error('当前页面查询已改变，请重新“载入当前页面”后再分析。');
+    const now=Date.now();activePeriod=comparisonPeriod(now,$('period').value);const cutoff=activePeriod.cutoff;
+    $('period-description').textContent=activePeriod.description;
+    const pageIssues=await search(jql), issues=pageIssues.filter(i=>matchesEpic(i,field,ids)), full=new Array(issues.length);let cursor=0,done=0,failed;
+    await Promise.all(Array.from({length:Math.min(3,issues.length)},async()=>{while(cursor<issues.length&&!failed){const i=cursor++;try{full[i]=await history(issues[i]);message(`读取完整历史 ${++done} / ${issues.length}…`);}catch(e){failed=e;}}}));
+    if(failed)throw failed;
+    const scoped=full.filter(i=>isStory(i)&&matchesEpic(i,field,ids));
+    const allGroups=aggregate(scoped,field,ids,cutoff,now);
+    const calculated=selectStatusGroups(allGroups,statusIds);
+    const stateNames=statusIds===null?'全部指定的 14 个状态':[...$('statuses').querySelectorAll('input:checked')].map(x=>x.parentElement.textContent).join('、');
+    reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜当前页面全部分页｜JQL：${jql}｜所选 Epic：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯`;
+    reportJiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql});
+    reportIssues=scoped;reportIds=ids;reportStatuses=statusIds;reportNow=now;
+    groups=calculated;const picker=$('notify-project');picker.replaceChildren();for(const key of [...new Set(scoped.map(i=>i.key.split('-')[0].toUpperCase()))].sort()){const label=text('label','',picker);const input=document.createElement('input');input.type='checkbox';input.value=key;input.checked=hub.target(key+'-1')!==null;input.disabled=hub.projects().some(p=>p.projectKey===key&&p.enabled===false);if(input.disabled)label.title='项目通知已停用，请在配置中心启用';label.append(input,document.createTextNode(key));}render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Epic 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Epic 分组。合计仅包含所选状态。`);
+  }
+// Self-contained snapshot: no Jira API, authentication tokens, or external assets.
+function buildInteractiveReport(model){
+  const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · Epic 报告</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f3f6fc;color:#24334d;font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif}header{background:white;border-bottom:1px solid #e0e7f1;padding:20px max(24px,calc((100vw - 1120px)/2))}h1{font-size:24px;margin:0}h2{font-size:18px;margin:0 0 10px}small,.muted{color:#7b899e;font-size:12px}main{max-width:1168px;padding:24px;margin:auto}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:16px 0}.card{background:white;border:1px solid #e0e7f1;border-radius:12px;padding:20px;margin:16px 0;overflow-x:auto}button,select,input,a.action{font:inherit;border:1px solid #d9e2f1;border-radius:7px;padding:7px 12px;background:white;color:#245de8;cursor:pointer}input{color:#24334d;min-width:230px}.action{text-decoration:none}table{width:100%;border-collapse:collapse}th,td{padding:11px 12px;border-bottom:1px solid #edf1f7;text-align:left;vertical-align:top}th{background:#f3f6fc;color:#738198;font-size:12px}td.number,th.number{text-align:center}td.number button{border:0;padding:0;background:none;text-decoration:underline;font-variant-numeric:tabular-nums}tr.total{background:#edf3ff;font-weight:700}.positive{color:#d13438}.changed{background:#fff9eb}a{color:#245de8}#detail{border-top:3px solid #245de8;scroll-margin-top:16px}.tag{display:inline-block;background:#eaf0ff;color:#245de8;font-size:11px;padding:3px 8px;border-radius:5px;margin-left:8px}#meta{white-space:pre-wrap;overflow-wrap:anywhere}#empty{color:#7b899e}@media(max-width:640px){main{padding:12px}.card{padding:12px}th,td{padding:8px}h1{font-size:20px}}@media print{body{background:white}.toolbar,button{display:none}.card{break-inside:avoid}}
+</style></head><body><header><h1>Jira Monitor <span class="tag">Epic Analysis</span></h1><small>独立交互报告 · 分析快照</small></header><main><p id="period"></p><div class="toolbar"><label>项目 <select id="project"></select></label><button id="all-changes">查看全部变化</button><a id="jira-query" class="action" target="_blank" rel="noopener noreferrer">打开 Jira 查询</a></div><p class="muted">点击昨日 / 今日数字，在下方查看对应工单及状态前后变化；报告保持生成时的数据，不会自动更新。</p><div id="groups"></div><section id="detail" class="card" hidden><h2 id="detail-title"></h2><div class="toolbar"><input id="search" placeholder="筛选 Jira 编号或摘要" aria-label="筛选明细"><span id="detail-count" class="muted"></span></div><table><thead><tr><th>Issue</th><th>摘要</th><th id="before-heading"></th><th id="after-heading"></th><th>变化</th></tr></thead><tbody id="detail-rows"></tbody></table><p id="empty" hidden>没有对应任务。</p></section><details class="card"><summary>统计口径与查询条件</summary><p id="meta" class="muted"></p></details></main><script id="report-data" type="application/json">${data}</script><script>
+(${reportRuntime.toString()})();
+</script></body></html>`;
+}
+function reportRuntime(){
+ 'use strict';
+ const model=JSON.parse(document.getElementById('report-data').textContent),$=id=>document.getElementById(id);
+ function el(tag,value,parent){const n=document.createElement(tag);if(value!==null)n.textContent=String(value);parent.append(n);return n;}
+ function safeUrl(value){try{const u=new URL(value);return u.protocol==='https:'||u.protocol==='http:'?u.href:'';}catch{return '';}}
+ const jira=safeUrl(model.jiraUrl);$('jira-query').href=jira||'#';$('period').textContent=model.period.description;$('meta').textContent=model.meta;
+ $('before-heading').textContent=model.period.before;$('after-heading').textContent=model.period.after;
+ const projectOf=key=>key.split('-')[0];let selection=[],detailTitle='';
+ const keys=[...new Set(model.groups.flatMap(g=>g.issues.map(i=>projectOf(i.key))))].sort();el('option','全部项目',$('project')).value='';for(const key of keys)el('option',key,$('project')).value=key;
+ function filtered(issues){return issues.filter(i=>!$('project').value||projectOf(i.key)===$('project').value);}
+ function renderDetails(){
+   const term=$('search').value.trim().toLowerCase(),items=selection.filter(i=>(i.key+' '+i.summary).toLowerCase().includes(term));$('detail-rows').replaceChildren();$('detail-title').textContent=detailTitle;$('detail-count').textContent=items.length+' / '+selection.length+' 条';$('empty').hidden=items.length>0;
+   for(const item of items){const tr=el('tr',null,$('detail-rows'));if(item.before!==item.after)tr.className='changed';const td=el('td',null,tr),link=el('a',item.key,td);if(jira){link.href=new URL('/browse/'+encodeURIComponent(item.key),jira).href;link.target='_blank';link.rel='noopener noreferrer';}el('td',item.summary,tr);el('td',item.before||'尚未创建',tr);el('td',item.after||'尚未创建',tr);el('td',!item.before?'新建':item.before!==item.after?'状态变化':'未变化',tr);}
+ }
+ function show(title,items){selection=items;detailTitle=title;$('search').value='';$('detail').hidden=false;renderDetails();$('detail').scrollIntoView?.({behavior:'smooth',block:'start'});}
+ function render(){
+  $('groups').replaceChildren();$('detail').hidden=true;
+  for(const group of model.groups){const issues=filtered(group.issues);if(!issues.length&&$('project').value)continue;const byKey=new Map(issues.map(i=>[i.key,i]));const card=el('section',null,$('groups'));card.className='card';el('h2',group.name+' · '+group.id,card);const changed=issues.filter(i=>i.changed),created=issues.filter(i=>!i.before&&i.after);el('button','查看变化 '+changed.length+' 条（新建 '+created.length+' 条）',card).onclick=()=>show(group.name+' · 净状态变化 / 新建任务',changed);
+   const table=el('table',null,card),head=el('tr',null,el('thead',null,table));['状态',model.period.before,model.period.after,'增减',model.period.rate].forEach((h,i)=>{const th=el('th',h,head);if(i)th.className='number';});const body=el('tbody',null,table);
+   for(const row of group.rows){const tr=el('tr',null,body);if(row.total)tr.className='total';el('td',row.name,tr);const sets={};for(const side of ['before','after']){sets[side]=row[side].filter(k=>byKey.has(k));const td=el('td',null,tr);td.className='number';const button=el('button',sets[side].length,td);button.setAttribute('aria-label',group.name+' '+row.name+' '+model.period[side]+'明细');button.onclick=()=>show(group.name+' · '+row.name+' · '+model.period[side],sets[side].map(k=>byKey.get(k)));}const a=sets.before.length,b=sets.after.length,delta=b-a;el('td',(delta>0?'+':'')+delta,tr).className='number'+(delta>0?' positive':'');el('td',a===0?(b===0?'—':'新增'):((b-a)/a*100).toFixed(1)+'%',tr).className='number';}
+  }
+ }
+ $('project').onchange=render;$('search').oninput=renderDetails;$('all-changes').onclick=()=>{const map=new Map();for(const g of model.groups)for(const i of filtered(g.issues))if(i.changed)map.set(i.key,i);show('全部 Epic · 净状态变化 / 新建任务',[...map.values()]);};render();
+}
+if(typeof module==='object'&&module.exports)module.exports={buildInteractiveReport};
+
+  function reportModel(source=groups){
+    return {version:1,meta:reportMeta,jiraUrl:reportJiraUrl,period:activePeriod,generatedAt:new Date(reportNow).toISOString(),groups:source.map(group=>{const rows=rowsWithTotal(group);return {id:group.id,name:group.name,issues:group.issues.map(x=>({key:x.issue.key,summary:x.issue.fields.summary||'',before:x.before?.name||'',after:x.after?.name||'',changed:x.changed})),rows:rows.map((row,i)=>({name:row.name,total:i===rows.length-1,before:row.before.map(x=>x.key),after:row.after.map(x=>x.key)}))};})};
+  }
+  function reportFile(source=groups,project='all'){
+    return {name:'Jira-Monitor-'+project+'-'+new Date(reportNow).toISOString().replace(/[:.]/g,'-')+'.html',html:buildInteractiveReport(reportModel(source))};
+  }
+  function downloadReport(file){const url=URL.createObjectURL(new Blob([file.html],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
+  function reportBase64(html){const bytes=new TextEncoder().encode(html);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);}
+  $('report-export').onclick=()=>{if(!busy&&groups.length)downloadReport(reportFile());};
+
+  let teamsSending=false,teamsFocus;
+  function openTeams(title){
+    teamsFocus=root.activeElement||document.activeElement;teamsBox.replaceChildren();text('h2',title,teamsBox);teamsDialog.style.display='block';teamsDialog.setAttribute('aria-label',title);
+  }
+  function closeTeams(){if(teamsSending)return;teamsDialog.style.display='none';teamsBox.replaceChildren();teamsFocus?.focus();}
+  function teamsButton(id,label,action){const b=text('button',label,teamsBox);b.id=id;b.style.margin='8px 8px 0 0';b.onclick=action;return b;}
+  function teamsConfig(){hub.configure();}
+  function teamsPreview(){
+    if(busy||teamsSending||!groups.length)return;
+    const keys=[...$('notify-project').querySelectorAll('input:checked')].map(input=>input.value);
+    if(!keys.length){message('请至少勾选一个推送项目。',true);return;}
+    try{
+      // Freeze each project's report and destination before displaying the confirmation.
+      const deliveries=keys.map(projectKey=>{
+        const configured=hub.target(projectKey+'-1');
+        if(!configured?.webhook)throw Error(projectKey+' 通知未启用或未配置 Webhook，请先在配置中心保存。未发送任何消息。');
+        const target={...configured,recipients:[...(configured.recipients||[])]},destination=validateTeamsUrl(target.webhook);
+        const projectIssues=reportIssues.filter(i=>i.key.split('-')[0].toUpperCase()===projectKey);
+        if(!projectIssues.length)throw Error(projectKey+' 在本次报告中没有任务，请重新分析。');
+        const projectGroups=selectStatusGroups(aggregate(projectIssues,field,reportIds,activePeriod.cutoff,reportNow),reportStatuses);
+        const report=buildTeamsReport(projectGroups,reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl);
+        const bodyText=projectKey+' · '+report.description+'\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
+        report.payload.projectKey=projectKey;report.payload.reportType='epic-analysis';
+        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Epic Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Epic Analysis',subtitle:report.description,sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
+        const file=reportFile(projectGroups,projectKey);
+        if(report.payload.email.enabled&&$('attach-report').checked){report.payload.email.attachments=[{name:file.name,contentType:'text/html',contentBytes:reportBase64(file.html)}];report.payload.email.bodyHtml+='<p style="font:12px Arial;color:#718098">附交互报告：'+hub.escapeHtml(file.name)+'。请下载附件并使用浏览器打开，点击数字查看工单明细和状态变化。</p>';}
+        if(new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Epic 后重试。');
+        return {projectKey,target,destination,report,file,data:JSON.stringify(report.payload)};
+      });
+      openTeams('项目推送预览 · '+deliveries.length+' 个项目');
+      text('p','每个项目分别发送到对应 Teams 和邮件收件人。勾选邮件附报告时，载荷另含该项目的 Jira 编号、摘要及状态变化，需工作流配置附件步骤；下方可先下载检查。',teamsBox);
+      const preview=document.createElement('div');preview.id='teams-preview-content';teamsBox.append(preview);
+      for(const item of deliveries){
+        const card=text('section','',preview);card.className='card';
+        text('h2',item.projectKey+' · Epic Analysis',card);
+        const download=text('button','下载该项目交互报告',card);download.onclick=()=>downloadReport(item.file);
+        text('p',item.report.payload.email.attachments?.length?'邮件包含交互报告附件载荷（需要工作流映射附件字段）':'邮件未附交互报告',card).className='muted';
+        text('p','邮件：'+(item.target.recipients.join(';')||'未配置'),card);
+        text('p','Webhook 主机：'+new URL(item.destination).hostname+'（密钥已隐藏）',card).className='muted';
+        text('p',item.report.description,card);
+        for(const section of item.report.sections){
+          text('h3',section.name,card);const table=document.createElement('table');card.append(table);
+          const head=document.createElement('tr');table.append(head);item.report.heading.forEach(h=>text('th',h,head));
+          section.rows.forEach((values,index)=>{const tr=document.createElement('tr');table.append(tr);if(index===section.rows.length-1)tr.style.cssText='font-weight:700;background:#edf3ff';values.forEach((v,i)=>{const td=text('td',v,tr);if(i===3&&Number(v)>0)td.style.color='#d13438';});});
+        }
+      }
+      const status=text('p','尚未发送。确认后按项目分别提交；不会自动重试。',teamsBox);status.id='teams-send-status';status.setAttribute('role','status');
+      const cancel=teamsButton('teams-preview-cancel','取消',closeTeams);
+      const send=teamsButton('teams-send','确认推送 '+deliveries.length+' 个项目',async()=>{
+        if(teamsSending||send.disabled)return;
+        if(typeof GM_xmlhttpRequest!=='function'){status.textContent='缺少油猴跨域请求权限，请更新脚本。';return;}
+        teamsSending=true;send.disabled=true;cancel.disabled=true;
+        const outcomes=[];
+        for(const item of deliveries){
+          if(!hub.target(item.projectKey+'-1')){outcomes.push(item.projectKey+'：通知已停用，跳过');continue;}
+          status.textContent=[...outcomes,item.projectKey+'：正在提交…'].join('\n');
+          const outcome=await new Promise(resolve=>{
+            let settled=false,request;
+            const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);resolve(value);};
+            const timer=setTimeout(()=>{finish('超时，结果未知，请检查工作流；未重试');request?.abort?.();},30000);
+            try{request=GM_xmlhttpRequest({method:'POST',url:item.destination,headers:{'Content-Type':'application/json'},data:item.data,timeout:30000,anonymous:true,redirect:'error',
+              onload:r=>finish(r.status>=200&&r.status<300?'已提交（HTTP '+r.status+'），最终投递请查工作流':'失败：'+teamsResponseInfo(r)),
+              onerror:r=>finish('网络失败，结果可能未知：'+teamsResponseInfo(r)+'；未重试'),
+              ontimeout:()=>finish('超时，结果未知，请检查工作流；未重试'),onabort:()=>finish('已中止，结果未知；未重试')});}
+            catch(error){finish('请求未发出：'+teamsResponseInfo(error));}
+          });
+          outcomes.push(item.projectKey+'：'+outcome);
+        }
+        teamsSending=false;cancel.disabled=false;cancel.textContent='关闭';status.style.whiteSpace='pre-wrap';status.textContent=outcomes.join('\n');
+      });send.className='primary';cancel.focus();
+    }catch(error){message(error.message,true);}
+  }
+  $('teams-preview').onclick=teamsPreview;
+
+  $('load').onclick=()=>guard(load);$('run').onclick=()=>guard(run);
+  let lastFocus;
+  const toolbar=document.createElement('div');toolbar.className='query-toolbar';const controls=root.querySelector('.controls');controls.before(toolbar);toolbar.append($('period').parentElement,$('load'));
+  const compact=document.createElement('style');compact.textContent='.query-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:16px 0}.query-toolbar label{width:240px;max-width:100%}.query-toolbar #load{width:auto;min-width:0;padding:8px 14px}.controls{align-items:start}#notify-box{grid-column:1/-1;padding:8px 12px}#notify-project{display:flex;gap:8px;flex-wrap:wrap;padding:4px 0}#notify-project label{display:inline-flex;flex-direction:row;align-items:center;gap:6px;background:#fff;border:1px solid #dce4f1;border-radius:7px;padding:7px 12px;cursor:pointer}#notify-project input{margin:0}.controls>#run,.controls>#export,.controls>#teams-preview{width:max-content;max-width:100%}.query-toolbar select{width:100%}';root.append(compact);
+  $('launch').style.display='none';$('close').style.display='none';
+  const embeddedStyle=document.createElement('style');embeddedStyle.textContent='#overlay{display:block!important;position:relative;inset:auto;padding:0;background:none;z-index:auto}#panel{height:auto;min-height:0;max-width:none;margin:0;padding:2px;background:transparent;box-shadow:none;border-radius:0}header{margin-bottom:12px}h1{font-size:21px}h1 small{display:none}.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch}fieldset{min-width:0;max-width:none;width:100%;background:#fff;border-color:#dce4f1;padding:12px}.choices{max-width:none;height:150px}.choices label{font-size:12px}label{font-size:12px;color:#718098}button{border-color:#dbe3f0;border-radius:7px;font-size:12px;padding:8px 10px}.primary{background:#245de8;border-color:#245de8}.notice{font-size:11px;line-height:1.7;color:#718098;background:#edf3ff;padding:10px 12px}#load{align-self:end}#message{font-size:12px}.card{border-color:#e1e7f1;padding:14px;border-radius:10px}p.muted{font-size:11px}#status-all{align-self:start}';root.append(embeddedStyle);
+  $('launch').onclick=()=>{lastFocus=document.activeElement;$('overlay').style.display='block';$('close').focus();};
+  const close=()=>{hub.hide();lastFocus?.focus();};$('close').onclick=close;
+  root.addEventListener('keydown',e=>{if(teamsDialog.style.display!=='none'){
+    if(e.key==='Escape'){e.preventDefault();closeTeams();}
+    if(e.key==='Tab'){const nodes=[...teamsBox.querySelectorAll('button,input')].filter(x=>!x.disabled),first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&root.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&root.activeElement===last){e.preventDefault();first?.focus();}}return;
+  }if(e.key==='Escape')close();if(e.key==='Tab'&&$('overlay').style.display==='block'){const nodes=[...$('panel').querySelectorAll('button,input,select,a')].filter(x=>!x.disabled);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&root.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&root.activeElement===last){e.preventDefault();first.focus();}}});
+  $('export').onclick=()=>{
+    const rows=[['统计说明',reportMeta],['Epic ID','Epic','状态',activePeriod.before,activePeriod.after,'增减',activePeriod.rate]];
+    for(const g of groups){const stats=rowsWithTotal(g);for(const r of stats)rows.push([g.id,g.name,r.name,r.before.length,r.after.length,r.after.length-r.before.length,rate(r.before.length,r.after.length)]);}
+    const blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='jira-epic-analysis-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
 })();
 

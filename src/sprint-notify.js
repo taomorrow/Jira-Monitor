@@ -6,7 +6,7 @@
       // Freeze each project's report and destination before displaying the confirmation.
       const deliveries=keys.map(projectKey=>{
         const configured=hub.target(projectKey+'-1');
-        if(!configured?.webhook)throw Error(projectKey+' 未配置 Webhook，请先在配置中心保存。未发送任何消息。');
+        if(!configured?.webhook)throw Error(projectKey+' 通知未启用或未配置 Webhook，请先在配置中心保存。未发送任何消息。');
         const target={...configured,recipients:[...(configured.recipients||[])]},destination=validateTeamsUrl(target.webhook);
         const projectIssues=reportIssues.filter(i=>i.key.split('-')[0].toUpperCase()===projectKey);
         if(!projectIssues.length)throw Error(projectKey+' 在本次报告中没有任务，请重新分析。');
@@ -45,6 +45,7 @@
         teamsSending=true;send.disabled=true;cancel.disabled=true;
         const outcomes=[];
         for(const item of deliveries){
+          if(!hub.target(item.projectKey+'-1')){outcomes.push(item.projectKey+'：通知已停用，跳过');continue;}
           status.textContent=[...outcomes,item.projectKey+'：正在提交…'].join('\n');
           const outcome=await new Promise(resolve=>{
             let settled=false,request;
