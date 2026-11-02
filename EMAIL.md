@@ -101,3 +101,7 @@ v6.7.2 起，项目 Key 可用 `/` 共享一行配置，如 `CSP/OSPIT`。收件
 邮件分支只判断 `email.enabled`，不依赖 reportType 或单工单字段，并放在 Teams 卡片循环之外；附件读取 `email.attachments` 而非顶层 Teams `attachments`。详细步骤、字段 schema 和 Outlook 动作片段见 [workflow/README.md](workflow/README.md)。其中连接引用需绑定到你自己的有效 Outlook 账号，尚未部署到你的工作流。
 
 COE 邮件现在默认附项目预警交互报告；Sprint / Epic 沿用“邮件附交互报告”选项。附件下载后用浏览器打开，交互不会在邮件正文中执行。新增预览与下载不会发送消息。
+
+## Mail V3 已收到正文，但没有附件
+
+Mail“发送电子邮件通知 (V3)”必须分别绑定 Attachment 与 Attachment File Name，不能只读取正文，也不能照搬 Outlook V2 的附件数组。详见 [当前 Mail V3 邮件附件修复](workflow/MAIL-V3-ATTACHMENT.md)。报告文件名仅为说明文字，当前没有部署在线报告链接。

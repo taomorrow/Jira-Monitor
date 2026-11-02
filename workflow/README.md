@@ -1,5 +1,7 @@
 # 邮件分支修复与交互报告
 
+**若当前发件人为 Microsoft Power Apps and Power Automate，使用 Mail“发送电子邮件通知 (V3)”，请优先看 [Mail V3 附件设置](MAIL-V3-ATTACHMENT.md)。下面的 Select 数组映射适用于 Office 365 Outlook V2，不适用于 Mail V3 的单文件参数。**
+
 这是可审查的动作片段，不是可直接导入或已部署的完整工作流。需要在你现有的 Power Automate 工作流中配置；脚本更新不会自动创建邮件动作或修复 Outlook 账号连接。
 
 1. 打开收到 Teams 消息的那一个 Webhook 工作流，检查同次运行的邮件动作。不要重发整个流程，以免 Teams 重复推送。

@@ -1,0 +1,67 @@
+{
+  "Email_enabled": {
+    "type": "If",
+    "expression": {
+      "equals": [
+        "@triggerBody()?['email']?['enabled']",
+        true
+      ]
+    },
+    "actions": {
+      "Report_attached": {
+        "type": "If",
+        "expression": {
+          "greater": [
+            "@length(coalesce(triggerBody()?['email']?['attachments'], json('[]')))",
+            0
+          ]
+        },
+        "actions": {
+          "Send_Mail_With_Report": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "parameters": {
+                "request/to": "@triggerBody()?['email']?['to']",
+                "request/subject": "@triggerBody()?['email']?['subject']",
+                "request/text": "@triggerBody()?['email']?['bodyHtml']",
+                "request/files": "@base64ToBinary(first(triggerBody()?['email']?['attachments'])?['contentBytes'])",
+                "request/filenames": "@first(triggerBody()?['email']?['attachments'])?['name']"
+              },
+              "host": {
+                "apiId": "/providers/Microsoft.PowerApps/apis/shared_sendmail",
+                "connectionName": "MAIL_CONNECTION_REFERENCE",
+                "operationId": "SendEmailV3"
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {
+            "Send_Mail_Without_Report": {
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "request/to": "@triggerBody()?['email']?['to']",
+                  "request/subject": "@triggerBody()?['email']?['subject']",
+                  "request/text": "@triggerBody()?['email']?['bodyHtml']"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_sendmail",
+                  "connectionName": "MAIL_CONNECTION_REFERENCE",
+                  "operationId": "SendEmailV3"
+                }
+              },
+              "runAfter": {}
+            }
+          }
+        },
+        "runAfter": {}
+      }
+    },
+    "else": {
+      "actions": {}
+    },
+    "runAfter": {}
+  }
+}
