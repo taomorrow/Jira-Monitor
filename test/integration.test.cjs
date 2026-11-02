@@ -332,3 +332,20 @@ test('reverse Epic membership failure remains an error and cannot produce an inc
  const root=f.hub.querySelector('#jea-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
  assert.match(root.getElementById('message').textContent,/403.*Field lookup forbidden/);assert.equal(root.getElementById('report-export').disabled,true);assert.equal(root.getElementById('teams-preview').disabled,true);assert.equal(root.querySelectorAll('#results section').length,0);f.dom.window.close();
 });
+
+test('COE submits a full project-specific interactive report attachment with the alert email',async()=>{
+ const state=alertState(),f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}}),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;
+ root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data);assert.equal(payload.email.enabled,true);assert.equal(payload.email.attachments.length,1);const file=payload.email.attachments[0];assert.match(file.name,/COE-CSP/);assert.equal(file.contentType,'text/html');
+ const html=Buffer.from(file.contentBytes,'base64').toString(),d=new JSDOM(html,{runScripts:'dangerously'});assert.deepEqual([...d.window.document.querySelectorAll('#rows a')].map(a=>a.textContent),['CSP-1','CSP-2']);assert.doesNotMatch(html,/OSPIT-4|CSP-3|example.api.powerplatform.com|dev@example.com/);d.window.document.querySelector('button[data-filter="DEV|warning"]').click();assert.equal(d.window.document.querySelector('#rows a').textContent,'CSP-1');assert.equal(d.window.document.querySelectorAll('#rows tr').length,1);f.requests[0].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);d.window.close();f.dom.window.close();
+});
+
+test('COE mail preview shows the actual recipient and HTML attachment without sending',()=>{
+ const state=alertState(),f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}}),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;
+ root.querySelector('[data-mail-preview]').click();const report=f.w.document.getElementById('jira-monitor-mail-reports').shadowRoot;assert.match(report.textContent,/test@example.com/);[...report.querySelectorAll('button')].find(b=>b.textContent==='预览邮件正文').click();const preview=f.w.document.getElementById('jira-monitor-email-preview').shadowRoot;assert.match(preview.textContent,/COE-CSP.*html/);assert.equal(preview.querySelector('iframe').getAttribute('sandbox'),'');assert.match(preview.querySelector('iframe').srcdoc,/CSP-1/);assert.doesNotMatch(preview.querySelector('iframe').srcdoc,/CSP-3|OSPIT-4/);assert.equal(f.requests.length,0);f.dom.window.close();
+});
+
+test('COE full report exports normal and alert results without reading notifications settings into the file',async()=>{
+ const state=alertState(),f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));}}),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;let blob;
+ f.w.URL.createObjectURL=b=>{blob=b;return 'blob:report';};f.w.URL.revokeObjectURL=()=>{};f.w.HTMLAnchorElement.prototype.click=()=>{};
+ root.querySelector('[data-report-export]').click();const html=await new Promise(resolve=>{const r=new f.w.FileReader();r.onload=()=>resolve(r.result);r.readAsText(blob);});const report=new JSDOM(html,{runScripts:'dangerously'});assert.equal(report.window.document.querySelectorAll('#rows tr').length,4);assert.doesNotMatch(html,/workflows\/test|test@example.com/);assert.equal(f.requests.length,0);report.window.close();f.dom.window.close();
+});

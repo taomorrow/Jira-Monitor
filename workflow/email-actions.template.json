@@ -1,0 +1,49 @@
+{
+  "Email_enabled": {
+    "type": "If",
+    "expression": {
+      "equals": [
+        "@triggerBody()?['email']?['enabled']",
+        true
+      ]
+    },
+    "actions": {
+      "ReportAttachments": {
+        "type": "Select",
+        "inputs": {
+          "from": "@coalesce(triggerBody()?['email']?['attachments'], json('[]'))",
+          "select": {
+            "Name": "@item()?['name']",
+            "ContentBytes": "@item()?['contentBytes']"
+          }
+        },
+        "runAfter": {}
+      },
+      "Send_Report_Email": {
+        "type": "OpenApiConnection",
+        "inputs": {
+          "parameters": {
+            "emailMessage/To": "@triggerBody()?['email']?['to']",
+            "emailMessage/Subject": "@triggerBody()?['email']?['subject']",
+            "emailMessage/Body": "@triggerBody()?['email']?['bodyHtml']",
+            "emailMessage/Attachments": "@body('ReportAttachments')"
+          },
+          "host": {
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+            "connectionName": "OUTLOOK_CONNECTION_REFERENCE",
+            "operationId": "SendEmailV2"
+          }
+        },
+        "runAfter": {
+          "ReportAttachments": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "else": {
+      "actions": {}
+    },
+    "runAfter": {}
+  }
+}

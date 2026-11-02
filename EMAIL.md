@@ -93,3 +93,11 @@ Epic 使用 `reportType: "epic-analysis"`，邮件仍读取 `email.enabled`、`e
 DEV 预警正文和 Teams 提及使用去重后的子任务负责人，DCT 仍使用父工单负责人。邮件收件人继续使用项目配置，不自动追加子任务负责人邮箱。列表载荷 `items[].devAssignees` 包含负责人姓名、账号及 Jira 返回的邮箱；未提供邮箱且未配置 Teams 映射时只显示姓名。旧扫描结果需重新扫描。Epic 的两侧零数量行在邮件及附件中一并隐藏。
 
 v6.7.2 起，项目 Key 可用 `/` 共享一行配置，如 `CSP/OSPIT`。收件人、Webhook、启用及自动通知设置共同生效，各项目仍分别生成邮件，载荷 `projectKey` 为对应的单个项目 Key。
+
+## v6.8.0：Teams 已收到但邮件未收到
+
+先在“预览邮件正文”检查本次 `email.enabled`、收件人、正文和附件；COE 使用“预览邮件 / 报告”。若这些内容正确，查看同次 Power Automate 运行中的邮件步骤：缺失/跳过时修正分支；失败时按具体错误修复连接/参数；成功时核对目标地址、发件箱及邮件追踪。不要仅通过 Teams 投递成功判断邮件成功，也不要通过重复提交整份通知进行排障。
+
+邮件分支只判断 `email.enabled`，不依赖 reportType 或单工单字段，并放在 Teams 卡片循环之外；附件读取 `email.attachments` 而非顶层 Teams `attachments`。详细步骤、字段 schema 和 Outlook 动作片段见 [workflow/README.md](workflow/README.md)。其中连接引用需绑定到你自己的有效 Outlook 账号，尚未部署到你的工作流。
+
+COE 邮件现在默认附项目预警交互报告；Sprint / Epic 沿用“邮件附交互报告”选项。附件下载后用浏览器打开，交互不会在邮件正文中执行。新增预览与下载不会发送消息。

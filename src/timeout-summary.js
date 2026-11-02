@@ -19,6 +19,7 @@
     if(displayed<reports.length)body.push({type:'TextBlock',text:'卡片显示前 '+displayed+' 条，共 '+reports.length+' 条；完整列表见邮件或下方 Jira 按钮。',wrap:true,isSubtle:true});
     const meta='扫描时间：'+beijingTime(Math.max(...reports.map(x=>x.item.checkedAt||0)));
     const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+target.projectKey+' · 超时预警列表（'+reports.length+'条）',bodyText:text,bodyHtml:hub.emailCard({title,subtitle,sections:[{title:'即将超期 / 已超期',headers:['Jira','摘要','负责人','规则与时长'],rows}],meta,url:jiraUrl})}:{enabled:false};
+    hub.attachEmailReport(email,hub.coeReportFile(reports,target.projectKey));
     return {type:'message',reportType:'timeout-summary',projectKey:target.projectKey,jiraUrl,summary:subtitle,text,email,scanTime:meta,items:reports.map(({item,report})=>({jiraKey:item.key,summary:item.summary,assignee:report.assignee,devAssignees:item.devAssignees||[],jiraUrl:report.jiraUrl,rules:report.rules})),attachments:[attachment]};
   }
   function alertCooldownKey(item,target){return 'jira-monitor-teams-cooldown-v2:'+target.projectKey+':'+item.key+':'+target.webhook+':'+(target.recipients||[]).map(x=>x.toLowerCase()).sort().join(';');}

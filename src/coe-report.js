@@ -1,0 +1,18 @@
+// Standalone COE snapshot. Deliberately exclude settings, webhook URLs and account identifiers.
+function buildCOEReport(model){
+ const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+ return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · COE 交互报告</title><style>*{box-sizing:border-box}body{margin:0;background:#f3f6fc;color:#24334d;font:14px/1.6 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:24px}section{background:white;border:1px solid #dfe7f2;border-radius:12px;padding:20px;margin:16px 0}h1{margin:0;color:#245de8}button,input{font:inherit;border:1px solid #dbe4f2;background:white;border-radius:7px;padding:8px 12px;margin:5px;cursor:pointer;color:#245de8}.selected{background:#eaf0ff;border-color:#245de8}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:10px;border-bottom:1px solid #e9eef6}th{background:#f3f6fc;color:#718098}a{color:#245de8}.warning{color:#a66a00}.overdue{color:#c12738}input{color:#24334d;min-width:280px}small{color:#718098}.scroll{overflow:auto}</style></head><body><main><h1>Jira Monitor · COE</h1><p id="meta"></p><section><h2>规则统计</h2><div id="counts"></div><small>点击数量筛选对应工单；这是生成时的快照，不会自动更新。</small></section><section><h2 id="title">全部工单</h2><input id="search" placeholder="搜索 Jira、摘要或负责人" aria-label="搜索工单"><span id="count"></span><div class="scroll"><table><thead><tr><th>Jira</th><th>摘要</th><th>通知负责人</th><th>当前状态</th><th>规则结果</th></tr></thead><tbody id="rows"></tbody></table></div></section></main><script id="report-data" type="application/json">${data}</script><script>(${coeReportRuntime.toString()})();</script></body></html>`;
+}
+function coeReportRuntime(){
+ const model=JSON.parse(document.getElementById('report-data').textContent),$=id=>document.getElementById(id);let selected='';
+ const el=(tag,text,parent)=>{const n=document.createElement(tag);n.textContent=text;parent.append(n);return n;};
+ $('meta').textContent=model.project+' · '+model.generatedAt;
+ function draw(){const term=$('search').value.trim().toLowerCase(),items=model.items.filter(i=>(!selected||i.rules.some(r=>r.name+'|'+r.level===selected))&&[i.key,i.summary,i.assignee].join(' ').toLowerCase().includes(term));$('rows').replaceChildren();$('count').textContent=items.length+' 条';
+ for(const i of items){const row=el('tr','',$('rows')),cell=el('td','',row),link=el('a',i.key,cell);try{const u=new URL(i.jiraUrl);if(['http:','https:'].includes(u.protocol)){link.href=u.href;link.target='_blank';link.rel='noopener noreferrer';}}catch{}el('td',i.summary,row);el('td',i.assignee,row);el('td',i.status,row);const results=el('td','',row);for(const r of i.rules)el('div',r.name+' · '+r.sla+' · '+r.days+' 天',results).className=r.level;}
+ }
+ function choose(value,title){selected=value;$('title').textContent=title;for(const b of $('counts').querySelectorAll('button'))b.classList.toggle('selected',b.dataset.filter===value);draw();}
+ const all=el('button','全部 '+model.items.length+' 条',$('counts'));all.dataset.filter='';all.onclick=()=>choose('','全部工单');
+ const rules=[...new Set(model.items.flatMap(i=>i.rules.map(r=>r.name)))];for(const name of rules)for(const [level,label] of [['warning','即将超期'],['overdue','已超期'],['normal','符合预期']]){const count=model.items.filter(i=>i.rules.some(r=>r.name===name&&r.level===level)).length;if(!count)continue;const b=el('button',name+' '+label+' '+count+' 条',$('counts'));b.dataset.filter=name+'|'+level;b.onclick=()=>choose(b.dataset.filter,name+' · '+label);}
+ $('search').oninput=draw;choose('','全部工单');
+}
+if(typeof module==='object'&&module.exports)module.exports={buildCOEReport};

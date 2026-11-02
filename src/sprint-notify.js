@@ -28,6 +28,7 @@
         text('h2',item.projectKey+' · Sprint Analysis',card);
         const download=text('button','下载该项目交互报告',card);download.onclick=()=>downloadReport(item.file);
         text('p',item.report.payload.email.attachments?.length?'邮件包含交互报告附件载荷（需要工作流映射附件字段）':'邮件未附交互报告',card).className='muted';
+        const mailPreview=text('button','预览邮件正文',card);mailPreview.onclick=()=>hub.previewEmail(item.report.payload.email);
         text('p','邮件：'+(item.target.recipients.join(';')||'未配置'),card);
         text('p','Webhook 主机：'+new URL(item.destination).hostname+'（密钥已隐藏）',card).className='muted';
         text('p',item.report.description,card);
