@@ -1,4 +1,4 @@
-# Jira Monitor v6.8.2
+# Jira Monitor v6.8.3
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -124,3 +124,7 @@ Teams 收到消息不等于邮件已投递。脚本只向 Webhook 提交 `email`
 浮动入口改为无文字四角星，保留拖动和位置记忆。Epic 按项目检查 Teams 卡片大小，超过 26 KiB 时显示“所选数量超过 Teams 大小限制，所选数据只通过邮件发送”，清空该项目顶层 `attachments` 并设置 `teams.enabled=false`、`deliveryMode=email-only`，保留完整邮件及已勾选的交互报告。没有邮件收件人时阻止提交并提示配置。未超限项目继续正常发送。
 
 工作流的邮件分支必须位于 Teams 循环之外，直接由触发器运行；Teams 分支增加条件 `not(equals(triggerBody()?['teams']?['enabled'], false))`，为真才发送卡片。旧版本载荷没有 teams 字段时仍正常发送。若邮件动作依赖 Teams 成功，需要先调整工作流；脚本无法自动修改远端工作流。
+
+## v6.8.3：状态勾选及入口颜色
+
+Sprint / Epic 默认全选且显示所有状态勾选，支持全选、清空以及单项修改；推送按钮为蓝色填充，浮动入口为蓝色四角星。脚本报告文件名始终使用 `.html`；若邮件收到 `Monitor Details.txt`，请把 Mail V3“附件文件名”固定值改为表达式 `first(triggerBody()?['email']?['attachments'])?['name']`。附件内容继续使用对应 contentBytes 的 base64ToBinary 表达式。

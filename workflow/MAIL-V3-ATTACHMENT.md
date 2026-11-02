@@ -35,3 +35,13 @@ greater(length(coalesce(triggerBody()?['email']?['attachments'], json('[]'))), 0
 目前报告是自包含 HTML 附件，没有部署在线报告存储。正文里的文件名不是网页地址。如果要改成邮件中直接打开的链接，需要另外配置 SharePoint / 内部文件服务器等受控存储，由工作流保存文件后将实际可访问链接加入邮件；不能使用你电脑的临时路径或虚构链接。
 
 参考：[Microsoft Mail 连接器参数](https://learn.microsoft.com/en-us/connectors/sendmail/#send-an-email-notification-v3)。
+
+## 收到 Monitor Details.txt 怎么改
+
+打开“发送电子邮件通知 (V3)”→ 显示全部参数 → 找到“附件文件名”。删掉固定的 `Monitor Details.txt`，点击 fx，填入：
+
+```text
+first(triggerBody()?['email']?['attachments'])?['name']
+```
+
+“附件”内容仍使用上表的 base64ToBinary 表达式。保存后新邮件将使用脚本提供的 Jira-Monitor-项目-时间.html 文件名。已有邮件附件不会改变。

@@ -323,3 +323,12 @@ test('Epic oversized Teams cards submit email only with complete report and reje
  }
  const f=boot(),launcher=f.hub.querySelector('#launcher');assert.equal(launcher.textContent,'');assert.ok(launcher.querySelector('svg'));assert.equal(launcher.getAttribute('aria-label'),'打开 Jira Monitor');f.dom.window.close();
 });
+
+test('Sprint and Epic visibly select all statuses by default, support clearing and synchronize individual choices',async()=>{
+ for(const epic of [false,true]){
+ const f=boot(),w=f.w,field='customfield_9',issue={key:'CSP-1',fields:{summary:'Story',issuetype:{name:'Story'},[field]:epic?'CSP-100':[{id:7,name:'Sprint',state:'active'}]}};
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:field,schema:{custom:epic?'com.pyxis.greenhopper.jira:gh-epic-link':'com.pyxis.greenhopper.jira:gh-sprint'}}]);return response(u.searchParams.get('jql')?.startsWith('key in')?{total:1,issues:[{key:'CSP-100',fields:{summary:'Epic',issuetype:{name:'Epic'}}}]}:{total:1,issues:[issue]});};
+ const root=f.hub.querySelector(epic?'#jea-host':'#jsa-host').shadowRoot;root.getElementById('load').click();await until(()=>!root.getElementById('run').disabled);const all=root.getElementById('status-all'),inputs=[...root.querySelectorAll('#statuses input')];assert.equal(inputs.length,14);assert.ok(all.checked&&inputs.every(x=>x.checked));assert.ok(root.getElementById('teams-preview').classList.contains('primary'));
+ root.getElementById('status-clear').click();assert.ok(!all.checked&&inputs.every(x=>!x.checked));root.getElementById('status-select-all').click();assert.ok(all.checked&&inputs.every(x=>x.checked));inputs[0].checked=false;inputs[0].dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(all.checked,false);assert.equal(inputs.filter(x=>x.checked).length,13);inputs[0].checked=true;inputs[0].dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(all.checked,true);all.checked=false;all.dispatchEvent(new w.Event('change'));assert.ok(inputs.every(x=>!x.checked));f.dom.window.close();
+ }
+});
