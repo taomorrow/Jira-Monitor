@@ -91,3 +91,5 @@ Epic 使用 `reportType: "epic-analysis"`，邮件仍读取 `email.enabled`、`e
 ## v6.7.0：DEV 负责人
 
 DEV 预警正文和 Teams 提及使用去重后的子任务负责人，DCT 仍使用父工单负责人。邮件收件人继续使用项目配置，不自动追加子任务负责人邮箱。列表载荷 `items[].devAssignees` 包含负责人姓名、账号及 Jira 返回的邮箱；未提供邮箱且未配置 Teams 映射时只显示姓名。旧扫描结果需重新扫描。Epic 的两侧零数量行在邮件及附件中一并隐藏。
+
+v6.7.2 起，项目 Key 可用 `/` 共享一行配置，如 `CSP/OSPIT`。收件人、Webhook、启用及自动通知设置共同生效，各项目仍分别生成邮件，载荷 `projectKey` 为对应的单个项目 Key。

@@ -2,17 +2,17 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.7.1').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.7.2').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.7.1')
+t=t[t.index('(function ()'):].replace('5.5.4','6.7.2')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
 t=t.replace('logic\\.azure\\.com$/i.test(u.hostname)', 'logic\\.azure\\.com$/i.test(u.hostname)||/(^|\\.)api\\.powerautomate\\.com$/i.test(u.hostname)')
 t=t.replace("    add('hr');add('button','统计规则设置'", """    add('button','连接诊断（HEAD，不推送）','data-project-diagnose').onclick=()=>{
-      const key=legacyKey.value.trim().toUpperCase(),target=projectConfigs().find(r=>r.projectKey===key);
+      const key=legacyKey.value.trim().toUpperCase(),target=projectConfigs().find(r=>r.projectKey===key||r.projectGroup===key);
       if(!target?.webhook){status.textContent='请在左侧输入框填写已保存的项目 Key，诊断其 Webhook';return;}
       status.textContent='正在进行 HEAD 连接诊断，未发送消息…';
       GM_xmlhttpRequest({method:'HEAD',url:target.webhook,anonymous:true,redirect:'error',timeout:15000,
@@ -76,7 +76,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.7.1',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.7.2',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -159,7 +159,26 @@ t=t.replace("{tr,key,webhook,emails,auto,deleted:false}", "{tr,key,webhook,email
 t=t.replace("autoNotify:r.auto.checked}", "autoNotify:r.auto.checked,enabled:r.enabled.checked}")
 t=t.replace("未配置项目只统计、不发送", "未配置或未启用的项目只统计、不发送；可同时启用多个项目")
 t=t.replace("make('b','超时预警',null,panel)", "make('b','COE · 超时预警',null,panel)")
-s=s.replace("input.checked=true;label.append", "input.checked=hub.target(key+'-1')!==null;input.disabled=hub.projects().some(p=>p.projectKey===key&&p.enabled===false);if(input.disabled)label.title='项目通知已停用，请在配置中心启用';label.append")
+# Grouped project rows retain their / notation in settings, and expand for every notification path.
+a=t.index('  function projectConfigs(){');b=t.index('  function projectTarget(',a)
+t=t[:a]+(root/'src/project-config.js').read_text()+t[b:]
+t=t.replace('const stored=projectConfigs();', 'const stored=rawProjectConfigs();')
+t=t.replace("key.style.width='85px';", "key.style.width='100%';key.placeholder='CSP/OSPIT';")
+t=t.replace("if(!/^[A-Z][A-Z0-9_]*$/.test(key))throw Error('项目 Key 无效：'+key);\n        if(seen.has(key))throw Error('项目 Key 重复：'+key);seen.add(key);", "const keys=projectKeys(key);for(const member of keys){if(seen.has(member))throw Error('项目 Key 重复：'+member);seen.add(member);}")
+t=t.replace('projectKey:key,webhook,recipients,autoNotify:', "projectKey:keys.join('/'),webhook,recipients,autoNotify:")
+t=t.replace('未配置或未启用的项目只统计、不发送；可同时启用多个项目', '多个项目可用 / 分隔（如 CSP/OSPIT），共用此行 Webhook、收件人和通知开关。未配置或未启用的项目只统计、不发送')
+t=t.replace("'已保存并验证 '+result.length+' 个项目，本页立即生效'", "'已保存并验证 '+result.length+' 组配置，覆盖 '+result.flatMap(r=>projectKeys(r.projectKey)).length+' 个项目，本页立即生效'")
+t=t.replace("render();status.style.color='#00875a';", "dispatchEvent(new Event('jira-monitor-project-config'));render();status.style.color='#00875a';")
+t=t.replace("const key=legacyKey.value.trim().toUpperCase();if(!/^[A-Z][A-Z0-9_]*$/.test(key))throw Error('请填写项目 Key');", "const key=projectKeys(legacyKey.value).join('/');")
+t=t.replace("r.key.value.trim().toUpperCase()===key", "r.key.value.trim()&&projectKeys(r.key.value).some(k=>projectKeys(key).includes(k))")
+# Rebuild options from current report and configured Story project keys only; never keep stale choices.
+a=s.index("const picker=$('notify-project');picker.replaceChildren();for(const key of ");b=s.index('render();message(',a)
+s=s[:a]+'renderNotifyProjects();'+s[b:]
+s=s.replace("  function selected(){", (root/'src/notify-projects.js').read_text()+"\n  function selected(){")
+s=s.replace("groups=[];$('results').replaceChildren();", "groups=[];$('notify-project').replaceChildren();$('results').replaceChildren();")
+s=s.replace("loadedQuery='';$('sprints').replaceChildren();", "loadedQuery='';$('notify-project').replaceChildren();$('sprints').replaceChildren();")
+s=s.replace('<legend>推送项目（可多选）</legend>', '<legend>通知项目（工单所属项目，可多选）</legend>')
+
 # Replace inline drilldown with a separate, searchable dialog for both analysis modules.
 a=s.index('  function details(title,items){');b=s.index('  function render(){',a)
 s=s[:a]+"  function details(title,items){hub.showIssueDetails(title,items,activePeriod); }\n"+s[b:]

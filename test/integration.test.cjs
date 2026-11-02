@@ -34,12 +34,12 @@ test('mixed project Sprint reports route only selected project totals and shared
  async function click(id){root.getElementById(id).click();for(let i=0;i<100&&root.getElementById('run').disabled;i++)await new Promise(r=>setTimeout(r,1));}
  await click('load');await click('run');assert.match(root.getElementById('message').textContent,/分析完成/);
  root.querySelector('#results td button').click();assert.ok(w.document.getElementById('jira-monitor-issue-details'));assert.equal(root.getElementById('detail').childElementCount,0);w.document.getElementById('jira-monitor-issue-details').shadowRoot.querySelector('button').click();
- assert.equal(root.getElementById('notify-project').querySelectorAll('input').length,2);
+ assert.equal(root.getElementById('notify-project').querySelectorAll('input').length,1);
  for(const input of root.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='CSP';
  root.getElementById('notify-project').querySelector('input[value="CSP"]').checked=true;await click('teams-preview');assert.equal(f.requests.length,0);assert.ok(root.getElementById('teams-preview-content'),root.getElementById('message').textContent);assert.match(root.getElementById('teams-preview-content').textContent,/Shared Sprint/);
  root.getElementById('teams-send').click();assert.equal(f.requests.length,1);const request=f.requests[0],payload=JSON.parse(request.data);
  assert.equal(request.url,f.store.get('jira-monitor-projects-v1')[0].webhook);assert.equal(payload.projectKey,'CSP');assert.equal(payload.email.to,'test@example.com');const mail=new JSDOM(payload.email.bodyHtml).window.document;assert.ok(mail.querySelector('table thead th'));assert.match(mail.body.textContent,/所选状态合计/);assert.equal(mail.querySelector('pre'),null);assert.match(payload.email.bodyText,/In Progress \| 1 \| 1/);assert.doesNotMatch(payload.email.bodyText,/OSPIT-2/);
- request.onload({status:202});await new Promise(r=>setTimeout(r,1));root.getElementById('teams-preview-cancel').click();for(const input of root.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='OSPIT';await click('teams-preview');assert.equal(f.requests.length,1);assert.match(root.getElementById('message').textContent,/配置/);f.dom.window.close();
+ request.onload({status:202});await new Promise(r=>setTimeout(r,1));root.getElementById('teams-preview-cancel').click();for(const input of root.getElementById('notify-project').querySelectorAll('input'))input.checked=input.value==='OSPIT';await click('teams-preview');assert.equal(f.requests.length,1);assert.match(root.getElementById('message').textContent,/勾选/);f.dom.window.close();
 });
 test('shared settings reject duplicate keys and unsafe webhook URLs; HEAD sends no report',()=>{
  const f=boot();f.hub.querySelector('#nav-settings').click();
@@ -177,7 +177,7 @@ test('notification enabled setting persists per project and gates Sprint preview
  f.w.fetch=async path=>response(path.includes('/field')?[{id:'customfield_1',schema:{custom:'com.pyxis.greenhopper.jira:gh-sprint'}}]:path.includes('/search')?{total:1,issues:[issue]}:issue);
  const s=root.querySelector('#jsa-host').shadowRoot;
  for(const id of ['load','run']){s.getElementById(id).click();await until(()=>!s.getElementById('run').disabled);}
- const picker=s.getElementById('notify-project').querySelector('input');assert.equal(picker.disabled,true);assert.equal(picker.checked,false);picker.checked=true;s.getElementById('teams-preview').click();assert.match(s.getElementById('message').textContent,/未启用/);assert.equal(f.requests.length,0);
+ const picker=s.getElementById('notify-project').querySelector('input');assert.equal(picker.disabled,false);assert.equal(picker.checked,false);assert.match(picker.parentElement.textContent,/通知已停用/);picker.checked=true;s.getElementById('teams-preview').click();assert.match(s.getElementById('message').textContent,/未启用/);assert.equal(f.requests.length,0);
  f.store.get('jira-monitor-projects-v1')[0].enabled=true;s.getElementById('teams-preview').click();assert.ok(s.getElementById('teams-send'));
  f.store.get('jira-monitor-projects-v1')[0].enabled=false;s.getElementById('teams-send').click();await until(()=>s.getElementById('teams-send-status').textContent.includes('停用'));assert.equal(f.requests.length,0);f.dom.window.close();
 });
@@ -275,5 +275,33 @@ test('Epic displays server error details and generates no partial report on a fa
  w.fetch=async(path,options)=>{if(path.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);if(path.includes('/rest/agile/'))return {ok:false,status:denied?403:400,json:async()=>({errorMessages:[denied?'Epic permission denied':'Epic endpoint unavailable']})};if(options?.method==='POST'){fallbackCalls++;return {ok:false,status:400,json:async()=>({errorMessages:['Epic Link search is disabled'],errors:{jql:'Invalid Epic field'}})};}return response({total:1,issues:[epic]});};
  const root=f.hub.querySelector('#jea-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
  assert.match(root.getElementById('message').textContent,denied?/CSP-100.*403.*Epic permission denied/:/CSP-100.*兼容查询也失败.*Epic Link search is disabled.*Invalid Epic field/);assert.equal(fallbackCalls,denied?0:1);assert.equal(root.getElementById('export').disabled,true);assert.equal(root.getElementById('report-export').disabled,true);assert.equal(root.querySelectorAll('#results section').length,0);f.dom.window.close();
+ }
+});
+
+test('slash-separated projects share settings, retain grouped rows and reject overlaps',()=>{
+ const f=boot();f.hub.querySelector('#nav-settings').click();let settings=f.hub.querySelector('#settings-view');settings.querySelector('[data-project-key]').value=' csp / ospit ';settings.querySelector('[data-project-save]').click();
+ assert.match(settings.querySelector('[data-project-status]').textContent,/已保存/);assert.equal(f.store.get('jira-monitor-projects-v1').length,1);assert.equal(f.store.get('jira-monitor-projects-v1')[0].projectKey,'CSP/OSPIT');
+ f.hub.querySelector('#nav-settings').click();settings=f.hub.querySelector('#settings-view');assert.equal(settings.querySelectorAll('[data-project-row]').length,1);assert.equal(settings.querySelector('[data-project-key]').value,'CSP/OSPIT');
+ settings.querySelector('[data-project-add]').click();const row=[...settings.querySelectorAll('[data-project-row]')].at(-1);row.querySelector('[data-project-key]').value='CHM/OSPIT';settings.querySelector('[data-project-save]').click();assert.match(settings.querySelector('[data-project-status]').textContent,/重复.*OSPIT/);assert.equal(f.store.get('jira-monitor-projects-v1').length,1);
+ row.querySelector('[data-project-key]').value='CHM//FY26CC';settings.querySelector('[data-project-save]').click();assert.match(settings.querySelector('[data-project-status]').textContent,/无效/);assert.equal(f.requests.length,0);f.dom.window.close();
+});
+
+test('shared project row routes separate COE reports to the same webhook and mail list',async()=>{
+ const state=alertState(),f=boot('/issues/',{setup(w){w.sessionStorage.setItem('jira-monitor-batch-v5',JSON.stringify(state));w.GM_setValue('jira-monitor-projects-v1',[{projectKey:'CSP/OSPIT',webhook:'https://shared.logic.azure.com/workflows/report',recipients:['shared@example.com'],enabled:true}]);}}),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot;
+ root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);f.requests[0].onload({status:202});await until(()=>f.requests.length===2);f.requests[1].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);
+ assert.deepEqual(f.requests.map(r=>JSON.parse(r.data).projectKey),['CSP','OSPIT']);for(const r of f.requests){assert.equal(r.url,'https://shared.logic.azure.com/workflows/report');assert.equal(JSON.parse(r.data).email.to,'shared@example.com');}f.dom.window.close();
+});
+
+test('Sprint and Epic show configured Story projects only, clear stale options and refresh shared enable changes',async()=>{
+ for(const epic of [false,true]){
+ const f=boot(),w=f.w;w.GM_setValue('jira-monitor-projects-v1',[{projectKey:'CSP/OSPIT',webhook:'https://shared.logic.azure.com/workflows/report',recipients:['shared@example.com'],enabled:false}]);
+ const field='customfield_1',issues=['CSP-1','OSPIT-1','FY26CC-1'].map(key=>({key,fields:{summary:key,created:'2020-01-01T00:00:00Z',issuetype:{name:'Story'},status:{id:'1',name:'Open'},[field]:epic?'CSP-100':[{id:7,name:'Sprint',state:'active'}]},changelog:{startAt:0,total:0,histories:[]}}));
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:field,schema:{custom:epic?'com.pyxis.greenhopper.jira:gh-epic-link':'com.pyxis.greenhopper.jira:gh-sprint'}}]);if(u.pathname.startsWith('/rest/agile/'))return response({total:3,startAt:0,issues});if(u.pathname.endsWith('/search'))return response(u.searchParams.get('jql').startsWith('key in')?{total:1,issues:[{key:'CSP-100',fields:{summary:'Epic'}}]}:{total:3,issues});return response(issues.find(i=>u.pathname.endsWith('/'+i.key)));};
+ const root=f.hub.querySelector(epic?'#jea-host':'#jsa-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
+ assert.deepEqual([...root.querySelectorAll('#notify-project input')].map(x=>x.value),['CSP','OSPIT']);assert.doesNotMatch(root.getElementById('notify-project').textContent,/FY26CC/);
+ const csp=root.querySelector('#notify-project input[value="CSP"]');assert.equal(csp.disabled,false);csp.click();assert.equal(csp.checked,true);assert.match(root.getElementById('message').textContent,/通知已停用/);
+ f.hub.querySelector('#nav-settings').click();const settings=f.hub.querySelector('#settings-view');settings.querySelector('[data-project-enabled]').checked=true;settings.querySelector('[data-project-save]').click();assert.doesNotMatch(root.getElementById('notify-project').textContent,/通知已停用/);assert.equal(root.querySelector('#notify-project input[value="CSP"]').checked,true);
+ root.getElementById('teams-preview').click();assert.ok(root.getElementById('teams-send'),root.getElementById('message').textContent);root.getElementById('teams-send').click();await until(()=>f.requests.length===1);assert.equal(JSON.parse(f.requests[0].data).projectKey,'CSP');assert.equal(JSON.parse(f.requests[0].data).email.to,'shared@example.com');f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));root.getElementById('teams-preview-cancel').click();
+ root.getElementById('sprints').dispatchEvent(new w.Event('change'));assert.equal(root.querySelectorAll('#notify-project input').length,0);assert.equal(root.getElementById('teams-preview').disabled,true);assert.equal(f.requests.length,1);f.dom.window.close();
  }
 });
