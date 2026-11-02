@@ -191,7 +191,7 @@ test('Epic groups only Stories, drills down changes, sends separate project repo
  w.fetch=async path=>{const u=new URL(path,w.location.origin);
  if(u.pathname.startsWith('/rest/agile/')){const id=u.pathname.split('/').at(-2),scoped=issues.filter(i=>(parent?i.fields[field]?.key:i.fields[field])===id);return response({startAt:0,total:scoped.length,issues:scoped});}
  if(u.pathname.endsWith('/field'))return response(parent?[{id:'parent'}]:[{id:field,schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);
- if(u.pathname.endsWith('/search'))return response(u.searchParams.get('jql').startsWith('key in')?{total:2,issues:['CSP-100','CSP-200'].map(key=>({key,fields:{summary:'Epic '+key}}))}:{total:issues.length,issues});
+ if(u.pathname.endsWith('/search'))return response(u.searchParams.get('jql').startsWith('key in')?{total:2,issues:['CSP-100','CSP-200'].map(key=>({key,fields:{summary:'Epic '+key,issuetype:{name:'Epic'}}}))}:{total:issues.length,issues});
  const key=u.pathname.split('/').pop();historyKeys.push(key);return response(issues.find(i=>i.key===key));};
  w.HTMLElement.prototype.scrollIntoView=()=>{};
  const s=f.hub.querySelector('#jea-host').shadowRoot;
@@ -296,7 +296,7 @@ test('Sprint and Epic show configured Story projects only, clear stale options a
  for(const epic of [false,true]){
  const f=boot(),w=f.w;w.GM_setValue('jira-monitor-projects-v1',[{projectKey:'CSP/OSPIT',webhook:'https://shared.logic.azure.com/workflows/report',recipients:['shared@example.com'],enabled:false}]);
  const field='customfield_1',issues=['CSP-1','OSPIT-1','FY26CC-1'].map(key=>({key,fields:{summary:key,created:'2020-01-01T00:00:00Z',issuetype:{name:'Story'},status:{id:'1',name:'Open'},[field]:epic?'CSP-100':[{id:7,name:'Sprint',state:'active'}]},changelog:{startAt:0,total:0,histories:[]}}));
- w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:field,schema:{custom:epic?'com.pyxis.greenhopper.jira:gh-epic-link':'com.pyxis.greenhopper.jira:gh-sprint'}}]);if(u.pathname.startsWith('/rest/agile/'))return response({total:3,startAt:0,issues});if(u.pathname.endsWith('/search'))return response(u.searchParams.get('jql').startsWith('key in')?{total:1,issues:[{key:'CSP-100',fields:{summary:'Epic'}}]}:{total:3,issues});return response(issues.find(i=>u.pathname.endsWith('/'+i.key)));};
+ w.fetch=async path=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:field,schema:{custom:epic?'com.pyxis.greenhopper.jira:gh-epic-link':'com.pyxis.greenhopper.jira:gh-sprint'}}]);if(u.pathname.startsWith('/rest/agile/'))return response({total:3,startAt:0,issues});if(u.pathname.endsWith('/search'))return response(u.searchParams.get('jql').startsWith('key in')?{total:1,issues:[{key:'CSP-100',fields:{summary:'Epic',issuetype:{name:'Epic'}}}]}:{total:3,issues});return response(issues.find(i=>u.pathname.endsWith('/'+i.key)));};
  const root=f.hub.querySelector(epic?'#jea-host':'#jsa-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
  assert.deepEqual([...root.querySelectorAll('#notify-project input')].map(x=>x.value),['CSP','OSPIT']);assert.doesNotMatch(root.getElementById('notify-project').textContent,/FY26CC/);
  const csp=root.querySelector('#notify-project input[value="CSP"]');assert.equal(csp.disabled,false);csp.click();assert.equal(csp.checked,true);assert.match(root.getElementById('message').textContent,/通知已停用/);
@@ -304,4 +304,31 @@ test('Sprint and Epic show configured Story projects only, clear stale options a
  root.getElementById('teams-preview').click();assert.ok(root.getElementById('teams-send'),root.getElementById('message').textContent);root.getElementById('teams-send').click();await until(()=>f.requests.length===1);assert.equal(JSON.parse(f.requests[0].data).projectKey,'CSP');assert.equal(JSON.parse(f.requests[0].data).email.to,'shared@example.com');f.requests[0].onload({status:202});await new Promise(r=>setTimeout(r,1));root.getElementById('teams-preview-cancel').click();
  root.getElementById('sprints').dispatchEvent(new w.Event('change'));assert.equal(root.querySelectorAll('#notify-project input').length,0);assert.equal(root.getElementById('teams-preview').disabled,true);assert.equal(f.requests.length,1);f.dom.window.close();
  }
+});
+
+test('Epic discovery rejects ordinary parent issues before offering or querying them',async()=>{
+ const f=boot(),w=f.w,calls=[];
+ const members=[{key:'CSP-1',fields:{issuetype:{name:'Story'},customfield_9:'CFCSC-343'}},{key:'CSP-2',fields:{issuetype:{name:'Story'},customfield_9:'CSP-100'}}];
+ w.fetch=async path=>{calls.push(path);const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);return response(u.searchParams.get('jql').startsWith('key in')?{total:2,issues:[{key:'CFCSC-343',fields:{summary:'ordinary parent',issuetype:{name:'Story'}}},{key:'CSP-100',fields:{summary:'real Epic',issuetype:{name:'Epic'}}}]}:{total:2,issues:members});};
+ const root=f.hub.querySelector('#jea-host').shadowRoot;root.getElementById('load').click();await until(()=>!root.getElementById('run').disabled);assert.deepEqual([...root.querySelectorAll('#sprints input')].map(i=>i.value),['CSP-100']);assert.match(root.getElementById('message').textContent,/已排除.*CFCSC-343/);assert.equal(calls.some(p=>p.includes('/rest/agile/')),false);f.dom.window.close();
+});
+
+test('the exact parent Epic HTTP 400 uses paginated reverse membership, never infers zero',async()=>{
+ for(const empty of [false,true]){
+ const f=boot(),w=f.w,epic={key:'CFCSC-343',fields:{summary:'Actual Epic',issuetype:{name:'Epic'}}},issue={key:'CSP-1',fields:{summary:'Story outside original query',created:'2020-01-01T00:00:00Z',status:{id:'1',name:'Testing'},issuetype:{name:'Story'},customfield_9:'CFCSC-343'},changelog:{startAt:0,total:0,histories:[]}};let reverse=0;
+ w.fetch=async(path,options)=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',name:'Epic Link',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);
+ if(u.pathname.startsWith('/rest/agile/'))return {ok:false,status:400,json:async()=>({errorMessages:['Epic endpoint rejected']})};
+ if(options?.method==='POST')return {ok:false,status:400,json:async()=>({errorMessages:["No issues have a parent epic with key or name 'CFCSC-343'"]})};
+ if(u.pathname.endsWith('/search')){if(u.searchParams.get('jql')==='"Epic Link" IS NOT EMPTY'){reverse++;return response({startAt:0,total:empty?0:1,issues:empty?[]:[issue]});}return response({total:1,issues:[epic]});}
+ return response(u.pathname.includes('CFCSC-343')?epic:issue);};
+ const root=f.hub.querySelector('#jea-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
+ assert.equal(reverse,1);assert.match(root.getElementById('message').textContent,/分析完成/);assert.equal(root.querySelectorAll('#results section').length,empty?0:1);if(empty)assert.match(root.getElementById('message').textContent,/按 0 条处理.*CFCSC-343/);else assert.match(root.getElementById('results').textContent,/Testing/);assert.equal(f.requests.length,0);f.dom.window.close();
+ }
+});
+
+test('reverse Epic membership failure remains an error and cannot produce an incomplete report',async()=>{
+ const f=boot(),w=f.w,epic={key:'CFCSC-343',fields:{summary:'Epic',issuetype:{name:'Epic'}}};
+ w.fetch=async(path,options)=>{const u=new URL(path,w.location.origin);if(u.pathname.endsWith('/field'))return response([{id:'customfield_9',schema:{custom:'com.pyxis.greenhopper.jira:gh-epic-link'}}]);if(u.pathname.startsWith('/rest/agile/'))return {ok:false,status:400,json:async()=>({})};if(options?.method==='POST')return {ok:false,status:400,json:async()=>({errorMessages:["No issues have a parent epic with key or name 'CFCSC-343'"]})};if(u.pathname.endsWith('/search')&&u.searchParams.get('jql').endsWith('IS NOT EMPTY'))return {ok:false,status:403,json:async()=>({errorMessages:['Field lookup forbidden']})};if(u.pathname.includes('/issue/'))return response(epic);return response({total:1,issues:[epic]});};
+ const root=f.hub.querySelector('#jea-host').shadowRoot;for(const id of ['load','run']){root.getElementById(id).click();await until(()=>!root.getElementById('run').disabled);}
+ assert.match(root.getElementById('message').textContent,/403.*Field lookup forbidden/);assert.equal(root.getElementById('report-export').disabled,true);assert.equal(root.getElementById('teams-preview').disabled,true);assert.equal(root.querySelectorAll('#results section').length,0);f.dom.window.close();
 });

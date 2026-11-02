@@ -11,7 +11,7 @@
     }finally{clearTimeout(timeout);}
   }
   async function epicMembers(ids){
-    const all=[],globalKeys=new Set();
+    emptyEpics=[];let reverseMembers;const all=[],globalKeys=new Set();
     for(const id of ids){
       let start=0,total,mode='agile';const seen=new Set();
       do{
@@ -20,7 +20,16 @@
         try{page=mode==='agile'?await api('/rest/agile/1.0/epic/'+encodeURIComponent(id)+'/issue?'+new URLSearchParams({startAt:String(start),maxResults:'50',fields:fields.join(',')})):await fallback();}
         catch(error){
           if(mode!=='agile'||![400,404,405,501].includes(error.status))throw Error(id+'：'+error.message);
-          mode='search';try{page=await fallback();}catch(failure){throw Error(id+'：Epic 成员接口不可用，兼容查询也失败。'+failure.message);}
+          mode='search';try{page=await fallback();}catch(failure){
+            // Epic equality can fail even for a real Epic. Read the association field instead; never infer zero from an HTTP error.
+            if(start===0&&seen.size===0&&validEpics.has(id)&&failure.status===400&&failure.message.includes("No issues have a parent epic with key or name '"+id+"'")){
+              const current=await api('/rest/api/2/issue/'+encodeURIComponent(id)+'?fields=summary,issuetype');
+              if(!isEpic(current))throw Error(id+' 当前不是 Epic，请重新载入候选列表。');
+              if(!reverseMembers){message('Epic 精确查询不可用，正在分页核对 Jira 关联字段…');reverseMembers=await search((field==='parent'?'parent':'"'+epicClause.replace(/[\\"]/g,'\\$&')+'"')+' IS NOT EMPTY');}
+              const members=reverseMembers.filter(issue=>sprints(issue.fields[field]).some(epic=>epic.id===id));
+              if(!members.length)emptyEpics.push(id);page={total:members.length,startAt:0,issues:members};
+            }else throw Error(id+'：Epic 成员接口不可用，兼容查询也失败。'+failure.message);
+          }
         }
         if(!Array.isArray(page.issues)||!Number.isInteger(page.total)||page.total<0)throw Error(id+'：Epic 成员分页格式无效，未生成报告。');
         if((page.startAt!==undefined&&page.startAt!==start)||(total!==undefined&&total!==page.total)||(!page.issues.length&&start<page.total))throw Error(id+'：Epic 分页发生变化或提前结束，请重新分析。');

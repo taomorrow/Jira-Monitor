@@ -1,4 +1,4 @@
-# Jira Monitor v6.7.2
+# Jira Monitor v6.7.3
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -79,7 +79,7 @@ HTTP 2xx 仅表示 Webhook 接受请求；卡片和邮件最终投递请查看�
 
 验证未连接实际 Jira / Teams / 邮件服务，也未发送真实通知。
 
-## Epic 分析（v6.7.2）
+## Epic 分析（v6.7.3）
 
 左侧 Epic → 载入当前页面（全部分页）→ 多选 Epic、状态和日/周对比 → 开始分析。当前查询仅用于发现 Epic，可从 Epic 工单或已关联工单识别 Epic；正式分析按 Epic Link / parent 查询所选 Epic 下全部 Story（也识别“故事”“用户故事”类型名），不再受列表的其他筛选条件限制。排除 Bug、Task、Subtask 等其他类型，没有 Epic 归属的 Story 不纳入。统计数量以当前账号的 Jira 可见权限为准。
 
@@ -89,18 +89,24 @@ Epic 两个对比时点数量都为 0 的状态行自动隐藏；所选状态下
 
 优先从 Jira 字段定义识别 Epic Link，兼容无 Epic Link 时使用 parent 字段。按照 Atlassian [Epic Link 字段说明](https://developer.atlassian.com/cloud/jira/software/rest/intro)读取当前所属 Epic，再用完整状态历史回溯昨天/上周状态；不会还原过去的 Epic 归属。无 Epic 读取权限时以编号显示。完整历史缺失时停止生成结果，避免误报。
 
-## DEV 子任务负责人（v6.7.2）
+## DEV 子任务负责人（v6.7.3）
 
 COE 扫描 DEV 状态工单时读取其全部子任务负责人，去重后用于 DEV 的负责人显示、Excel、Teams 提及和邮件正文，不再使用父工单负责人代替。无负责人时明确显示未分配，不虚构提及；Jira 返回邮箱或配置了 Teams 用户映射时生成真正的 @提及，否则显示姓名。DCT 保持使用父工单负责人；同一列表同时命中 DEV 与 DCT 时合并去重相应通知对象。
 
 子任务负责人读取与父工单扫描共用暂停/停止检查，读取失败则暂停保留进度，不保存不完整结果。升级前已保存的扫描结果不含子任务负责人，请停止旧任务并重新扫描。邮件收件人继续遵循项目配置，提及子任务负责人不会擅自添加邮件收件人。验证使用模拟 Jira 接口，未向真实 Teams 或邮箱发送消息。
 
-### v6.7.2 Epic HTTP 400 兼容修复
+### v6.7.3 Epic HTTP 400 兼容修复
 
 Epic 成员改为逐个 Epic 使用 Jira Software 成员接口分页读取，不再提交包含所有所选 Epic 的长查询。接口返回 400 / 404 / 405 / 501 时，仅对该 Epic 使用字段定义中的查询名称执行 POST 搜索；401 / 403 或服务端错误不自动换路径。分页不完整、重复或任一 Epic 请求失败时不生成部分报告。错误提示显示 Epic 编号、HTTP 状态及 Jira 返回的 errorMessages / errors，便于区分字段、查询和权限问题。参考 [Atlassian Data Center Epic API](https://developer.atlassian.com/server/jira/platform/rest/v10002/api-group-epic/)。此修复已用模拟 HTTP 400、兼容查询、分页和权限失败验证，未连接实际 Jira 服务。
 
-### v6.7.2 共享项目配置与通知项目选择
+### v6.7.3 共享项目配置与通知项目选择
 
 配置中心项目 Key 可填写 `CSP/OSPIT` 或 `CSP/OSPIT/CHM`，以 `/` 分隔；这些项目共用同一行的 Webhook、邮件列表、启用开关和批量自动通知设置。保存时统一大写、去除两侧空格；同一项目不能在多行配置中重复出现。原单项目配置兼容保留。共享目标不合并项目数据，仍按项目分别生成报告和发送，避免跨项目混淆。
 
 Sprint / Epic 的“通知项目”是报告中工单所属项目，不是 Epic 名称。仅列出当前结果中已在配置中心配置的项目；未配置的 FY26CC 等工单项目不再出现在通知选项中。更改筛选、重新载入或分析失败后会清空旧选项。停用项目的复选框可以选择，并明确标出“通知已停用”，但发送仍要求在配置中心启用；点击“通知设置”可进入修改，保存后立即同步两个模块的选项，无需重新分析。
+
+### v6.7.3：校验 Epic 类型及关联字段兼容读取
+
+关联字段中的编号仅视为候选，载入时分页读取真实工单类型；普通 Story / Task 父工单及不可见候选不会列为可选 Epic，界面列明排除项。不会仅凭 parent 字段或编号认定工单是 Epic。
+
+如果已确认的 Epic 在首个成员分页和兼容查询中返回精确错误 `No issues have a parent epic with key or name 'KEY'`，先重新确认该工单类型，再分页读取当前账号可见、关联字段非空的工单，按返回的关联编号精确筛选成员；只统计其中 Story。兼容扫描跨可见项目，数据量大时耗时可能增加，同一轮分析只读取一次。成功核对后确实没有成员的 Epic 才记为 0 条；关联字段读取失败、权限失败及其他错误仍中止报告和推送，不把 HTTP 错误当作 0 条。

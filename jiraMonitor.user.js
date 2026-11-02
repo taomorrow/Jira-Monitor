@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.7.2
+// @version      6.7.3
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -43,7 +43,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.7.2',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.7.3',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
@@ -121,11 +121,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.7.2 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.7.3 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.7.2 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.7.3 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -1056,7 +1056,7 @@ function initTimeout(detailOnly){
   setInterval(()=>{autoDetail();if(!host.isConnected)mountPanel();if(!badge.isConnected)document.documentElement.append(badge);pump();},1500);
   if(!detailOnly){hub.configure=configureCenter;hub.projects=projectConfigs;hub.target=projectTarget;hub.safeError=safeError;}else{hub.startDetail=autoDetail;hub.stopDetail=()=>{epoch++;busy=false;detailRoute='';const state=get();if(state?.active){state.active=false;state.phase='stopped';save(state);}};}
   badge.remove();badge.style.display='none';
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.7.2 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.7.3 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1559,7 +1559,8 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     }).filter(g=>[...g.rows.values()].some(r=>r.before.length||r.after.length));
   }
   // Epic membership uses the current Epic Link (or parent on newer Jira instances).
-  const epicNames=new Map();
+  const epicNames=new Map(),validEpics=new Set();let epicDiscoveryNote='',emptyEpics=[];
+  function isEpic(issue){const type=issue.fields?.issuetype;return type?.subtask!==true&&(/^epic$|^史诗$/i.test(type?.name||'')||type?.hierarchyLevel===1);}
   function isStory(issue){return /^(story|用户故事|故事)$/i.test(String(issue.fields?.issuetype?.name||'').trim())&&issue.fields?.issuetype?.subtask!==true;}
   function sprints(value){
     if(value==null||value==='')return [];
@@ -1570,18 +1571,25 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
       return {id:key,name:epicNames.get(key)||key,state:''};
     });
   }
-  function discoverEpics(issue){return /^epic$/i.test(issue.fields?.issuetype?.name||'')?[{id:issue.key,name:epicNames.get(issue.key)||issue.key,state:''}]:issue.fields?.issuetype?.subtask?[]:sprints(issue.fields[field]);}
+  function discoverEpics(issue){return isEpic(issue)?[{id:issue.key,name:epicNames.get(issue.key)||issue.key,state:''}]:issue.fields?.issuetype?.subtask?[]:sprints(issue.fields[field]);}
   function epicSingleQuery(id){const selector=field==='parent'?'parent':'"'+epicClause.replace(/[\\"]/g,'\\$&')+'"';return selector+' = "'+id+'"';}
   function epicMemberQuery(ids){return ids.map(id=>'('+epicSingleQuery(id)+')').join(' OR ');}
   async function loadEpicNames(issues){
+    validEpics.clear();epicNames.clear();epicDiscoveryNote='';
     const keys=[...new Set(issues.flatMap(i=>discoverEpics(i).map(x=>x.id)))];
-    // Restrict lookup to observed Epic keys; never broaden the user's Story query.
-    for(let offset=0;offset<keys.length;offset+=100){
-      const subset=keys.slice(offset,offset+100),params=new URLSearchParams({jql:'key in ('+subset.join(',')+')',fields:'summary,issuetype',maxResults:'100'});
-      const data=await api('/rest/api/2/search?'+params);
-      if(!Array.isArray(data.issues))throw Error('Epic 名称查询响应无效，请重试。');
-      for(const issue of data.issues)epicNames.set(issue.key,issue.key+' · '+(issue.fields.summary||''));
+    const record=issue=>{if(isEpic(issue)){validEpics.add(issue.key);epicNames.set(issue.key,issue.key+' · '+(issue.fields.summary||''));}};
+    // An arbitrary parent key is a candidate, never proof that its issue is an Epic.
+    issues.forEach(record);
+    for(let offset=0;offset<keys.length;offset+=50){
+      const subset=keys.slice(offset,offset+50);let start=0,total;
+      do{
+        const params=new URLSearchParams({jql:'key in ('+subset.join(',')+')',fields:'summary,issuetype',startAt:String(start),maxResults:'50'}),data=await api('/rest/api/2/search?'+params);
+        if(!Array.isArray(data.issues)||!Number.isInteger(data.total)||data.total<0||(data.startAt!==undefined&&data.startAt!==start)||(total!==undefined&&total!==data.total)||(!data.issues.length&&start<data.total))throw Error('Epic 类型校验分页不完整，请重新载入。');
+        total=data.total;data.issues.forEach(record);start+=data.issues.length;
+      }while(start<total);
     }
+    const skipped=keys.filter(key=>!validEpics.has(key));
+    if(skipped.length)epicDiscoveryNote='；已排除 '+skipped.length+' 个非 Epic 或不可见候选：'+skipped.join('、');
   }
   function statusAt(issue, cutoff, inclusive = true) {
     const created = Date.parse(issue.fields.created);
@@ -1746,7 +1754,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     }finally{clearTimeout(timeout);}
   }
   async function epicMembers(ids){
-    const all=[],globalKeys=new Set();
+    emptyEpics=[];let reverseMembers;const all=[],globalKeys=new Set();
     for(const id of ids){
       let start=0,total,mode='agile';const seen=new Set();
       do{
@@ -1755,7 +1763,16 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         try{page=mode==='agile'?await api('/rest/agile/1.0/epic/'+encodeURIComponent(id)+'/issue?'+new URLSearchParams({startAt:String(start),maxResults:'50',fields:fields.join(',')})):await fallback();}
         catch(error){
           if(mode!=='agile'||![400,404,405,501].includes(error.status))throw Error(id+'：'+error.message);
-          mode='search';try{page=await fallback();}catch(failure){throw Error(id+'：Epic 成员接口不可用，兼容查询也失败。'+failure.message);}
+          mode='search';try{page=await fallback();}catch(failure){
+            // Epic equality can fail even for a real Epic. Read the association field instead; never infer zero from an HTTP error.
+            if(start===0&&seen.size===0&&validEpics.has(id)&&failure.status===400&&failure.message.includes("No issues have a parent epic with key or name '"+id+"'")){
+              const current=await api('/rest/api/2/issue/'+encodeURIComponent(id)+'?fields=summary,issuetype');
+              if(!isEpic(current))throw Error(id+' 当前不是 Epic，请重新载入候选列表。');
+              if(!reverseMembers){message('Epic 精确查询不可用，正在分页核对 Jira 关联字段…');reverseMembers=await search((field==='parent'?'parent':'"'+epicClause.replace(/[\\"]/g,'\\$&')+'"')+' IS NOT EMPTY');}
+              const members=reverseMembers.filter(issue=>sprints(issue.fields[field]).some(epic=>epic.id===id));
+              if(!members.length)emptyEpics.push(id);page={total:members.length,startAt:0,issues:members};
+            }else throw Error(id+'：Epic 成员接口不可用，兼容查询也失败。'+failure.message);
+          }
         }
         if(!Array.isArray(page.issues)||!Number.isInteger(page.total)||page.total<0)throw Error(id+'：Epic 成员分页格式无效，未生成报告。');
         if((page.startAt!==undefined&&page.startAt!==start)||(total!==undefined&&total!==page.total)||(!page.issues.length&&start<page.total))throw Error(id+'：Epic 分页发生变化或提前结束，请重新分析。');
@@ -1853,7 +1870,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     loadedQuery='';$('notify-project').replaceChildren();$('sprints').replaceChildren();
     await detectField();const query=await currentQuery(), issues=await search(query), map=new Map();
     await loadEpicNames(issues);
-    for(const i of issues){const list=discoverEpics(i);for(const s of list)map.set(s.id,s);}
+    for(const i of issues){const list=discoverEpics(i).filter(x=>validEpics.has(x.id));for(const s of list)map.set(s.id,s);}
     $('sprints').replaceChildren();
     const options=[...map.values()].sort((a,b)=>(/active/i.test(b.state)?1:0)-(/active/i.test(a.state)?1:0)||b.name.localeCompare(a.name));
     for(const s of options)choice($('sprints'),s.id,`${s.name}${s.state?' · '+s.state:''} [${s.id}]`,true);
@@ -1861,7 +1878,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     $('statuses').replaceChildren();$('status-all').checked=true;
     for(const name of STATUS_NAMES)choice($('statuses'),normalized(name),name,false);
     loadedQuery=query;
-    message(`已读取当前页面全部 ${issues.length} 条任务、${options.length} 个 Epic 分组。可多选后分析。\nJQL：${loadedQuery}${issues.length?'':'（当前页面没有可见任务）'}`);
+    message(`已读取当前页面全部 ${issues.length} 条任务、${options.length} 个 Epic 分组。可多选后分析。${epicDiscoveryNote}\nJQL：${loadedQuery}${issues.length?'':'（当前页面没有可见任务）'}`);
   }
   function details(title,items){hub.showIssueDetails(title,items,activePeriod); }
   function render(){
@@ -1889,10 +1906,10 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     const allGroups=aggregate(scoped,field,ids,cutoff,now);
     const calculated=selectStatusGroups(allGroups,statusIds);
     const stateNames=statusIds===null?'全部指定的 14 个状态':[...$('statuses').querySelectorAll('input:checked')].map(x=>x.parentElement.textContent).join('、');
-    reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜所选 Epic 全部 Story｜JQL：${epicQuery}｜所选 Epic：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯`;
+    reportMeta=`查询开始 ${new Date(now).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false})}（上海）｜${activePeriod.description}｜所选 Epic 全部 Story｜JQL：${epicQuery}｜所选 Epic：${ids.join("、")}｜状态：${stateNames}｜当前成员回溯${emptyEpics.length?'｜Jira 未找到关联成员，按 0 条处理：'+emptyEpics.join('、'):''}`;
     reportJiraUrl=location.origin+'/issues/?'+new URLSearchParams({jql:epicQuery});
     reportIssues=scoped;reportIds=ids;reportStatuses=statusIds;reportNow=now;
-    groups=calculated;renderNotifyProjects();render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Epic 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Epic 分组。合计仅包含所选状态。`);
+    groups=calculated;renderNotifyProjects();render();message(`分析完成：页面共 ${pageIssues.length} 条；所选 Epic 匹配 ${scoped.length} 条；所选状态涉及 ${new Set(groups.flatMap(g=>g.issues.map(x=>x.issue.key))).size} 条，${groups.length} 个 Epic 分组。合计仅包含所选状态。${emptyEpics.length?' Jira 未找到关联成员，按 0 条处理：'+emptyEpics.join('、'):''}`);
   }
 // Self-contained snapshot: no Jira API, authentication tokens, or external assets.
 function buildInteractiveReport(model){
