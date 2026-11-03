@@ -27,7 +27,7 @@
     if(teamsSending)return;
     teamsSending=true;render();
     const state=JSON.parse(JSON.stringify(source)),rules=state.rules||CONFIG.rules,groups=new Map(),outcomes=[];
-    for(const item of state.results||[]){if(!hasTeamsAlert(item,rules))continue;const key=projectKeyOf(item.key);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
+    for(const item of state.results||[]){if(!hasTeamsAlert(item,rules)||!hub.jobProjectAllowed(projectKeyOf(item.key)))continue;const key=projectKeyOf(item.key);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
     try{
       if(!groups.size){notice('没有即将超期或已超期的工单，无需发送。');return;}
       for(const [key,items] of groups){
@@ -37,7 +37,9 @@
           if(automatic&&!target.autoNotify)return key+'：批量自动通知未开启，跳过';
           const eligible=automatic?items.filter(item=>!(GM_getValue(alertCooldownKey(item,target),null)?.until>Date.now())):items;
           if(!eligible.length)return key+'：全部工单仍在通知冷却期，跳过';
-          const payload=alertSummaryPayload(eligible,rules,target);
+          if(hub.jobDelivery?.email&&!target.recipients.length)throw Error('未配置邮件收件人');
+          const payload=hub.deliveryPayload(alertSummaryPayload(eligible,rules,target));
+          if(hub.jobDelivery&&!hub.jobDelivery.attach&&payload.email){delete payload.email.attachments;payload.email.bodyHtml=payload.email.bodyHtml?.replace(/<p data-jira-monitor-report[\s\S]*?<\/p>/g,'');}
           if(automatic){const hours=Number(CONFIG.notificationCooldownHours);if(!Number.isFinite(hours)||hours<=0)throw Error('通知冷却时间无效');for(const item of eligible)GM_setValue(alertCooldownKey(item,target),{until:Date.now()+hours*3600000,state:'submitted'});}
           await postTeams(payload,target.webhook);return key+'：已提交 1 份预警列表（'+eligible.length+' 条工单）';
         };
@@ -45,5 +47,6 @@
         catch(error){outcomes.push(key+'：提交失败或结果未知；'+safeError(error)+'。未自动重试。');showTeamsError(outcomes.join('\n'));}
       }
       notice(outcomes.join('\n')+'\n每个项目分别提交；Webhook 接收不代表 Teams / 邮件已投递。');
+      return outcomes;
     }finally{teamsSending=false;render();}
   }

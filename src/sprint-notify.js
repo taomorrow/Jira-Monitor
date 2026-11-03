@@ -1,7 +1,8 @@
-  function teamsPreview(){
+  async function teamsPreview(automated=false){
+    automated=automated===true;
     if(busy||teamsSending||!groups.length)return;
     const keys=[...$('notify-project').querySelectorAll('input:checked')].map(input=>input.value);
-    if(!keys.length){message('请至少勾选一个推送项目。',true);return;}
+    if(!keys.length){if(automated)throw Error('请至少勾选一个推送项目。');message('请至少勾选一个推送项目。',true);return;}
     try{
       // Freeze each project's report and destination before displaying the confirmation.
       const deliveries=keys.map(projectKey=>{
@@ -17,11 +18,13 @@
         report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
         const file=reportFile(projectGroups,projectKey);
         if(report.payload.email.enabled&&$('attach-report').checked){report.payload.email.attachments=[{name:file.name,contentType:'text/html',contentBytes:reportBase64(file.html)}];report.payload.email.bodyHtml+='<p style="font:12px Arial;color:#718098">附交互报告：'+hub.escapeHtml(file.name)+'。请下载附件并使用浏览器打开，点击数字查看工单明细和状态变化。</p>';}
+        if(hub.jobDelivery?.email&&!report.payload.email.enabled)throw Error(projectKey+' 未配置邮件收件人');
+        hub.deliveryPayload(report.payload);
         const oversized=new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
         const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
         if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
         if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
-        report.payload.teams={enabled:!emailOnly};
+        report.payload.teams={enabled:!emailOnly&&hub.jobDelivery?.teams!==false};
         if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}
         return {projectKey,target,destination,report,file,emailOnly,data:JSON.stringify(report.payload)};
       });
@@ -47,7 +50,8 @@
       }
       const status=text('p','尚未发送。确认后按项目分别提交；不会自动重试。',teamsBox);status.id='teams-send-status';status.setAttribute('role','status');
       const cancel=teamsButton('teams-preview-cancel','取消',closeTeams);
-      const send=teamsButton('teams-send','确认推送 '+deliveries.length+' 个项目',async()=>{
+      let deliveryPromise;
+      const deliver=async()=>{
         if(teamsSending||send.disabled)return;
         if(typeof GM_xmlhttpRequest!=='function'){status.textContent='缺少油猴跨域请求权限，请更新脚本。';return;}
         teamsSending=true;send.disabled=true;cancel.disabled=true;
@@ -68,6 +72,9 @@
           outcomes.push(item.projectKey+'：'+(item.emailOnly?'仅邮件 · ':'')+outcome);
         }
         teamsSending=false;cancel.disabled=false;cancel.textContent='关闭';status.style.whiteSpace='pre-wrap';status.textContent=outcomes.join('\n');
-      });send.className='primary';cancel.focus();
-    }catch(error){message(error.message,true);}
+        return outcomes;
+      };
+      const send=teamsButton('teams-send','确认推送 '+deliveries.length+' 个项目',()=>{deliveryPromise=deliver();});send.className='primary';cancel.focus();
+      if(automated){send.click();const outcomes=await deliveryPromise;if(!outcomes||outcomes.some(x=>/失败|未知|超时|未发出|跳过/.test(x)))throw Error(outcomes?.join('；')||'通知未提交');}
+    }catch(error){message(error.message,true);if(automated)throw error;}
   }

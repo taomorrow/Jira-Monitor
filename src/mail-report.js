@@ -6,7 +6,7 @@ hub.attachEmailReport=(email,file)=>{
  email.bodyHtml+='<p data-jira-monitor-report style="font:12px Arial;color:#718098">交互报告附件：'+hub.escapeHtml(file.name)+'。下载后用浏览器打开，点击数量查看对应 Jira 明细。</p>';
  return email;
 };
-hub.downloadFile=file=>{const url=URL.createObjectURL(new Blob([file.html],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);};
+hub.downloadFile=file=>{const url=URL.createObjectURL(new Blob([file.html],{type:file.type||'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);};
 hub.coeReportFile=(reports,project)=>{
  const model={project,generatedAt:new Date().toISOString(),items:reports.map(({item,report})=>({key:item.key,summary:item.summary||'',assignee:report.assignee||'未分配',status:item.currentStatus||'',jiraUrl:report.jiraUrl,rules:report.rules.map(r=>({name:r.name,sla:r.sla,days:r.days,level:r.level}))}))};
  return {name:'Jira-Monitor-COE-'+project+'-'+new Date().toISOString().replace(/[:.]/g,'-')+'.html',html:buildCOEReport(model)};
