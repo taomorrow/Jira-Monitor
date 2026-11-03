@@ -1,7 +1,26 @@
+// Load the native installer only after the user chooses Export; never during Jira startup.
+let macTemplatePromise;
+function loadMacAppTemplate(){
+ if(macTemplatePromise)return macTemplatePromise;
+ macTemplatePromise=new Promise((resolve,reject)=>{
+  GM_xmlhttpRequest({method:'GET',url:'https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/src/mac-app-template.base64',anonymous:true,timeout:30000,
+   onload:async response=>{try{
+    if(response.status!==200)throw Error('安装器下载失败（HTTP '+response.status+'），请检查 GitHub 连接后重试。');
+    const encoded=String(response.responseText||'').trim();if(!encoded||encoded.length>1000000)throw Error('安装器数据无效。');
+    const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(encoded));
+    const actual=[...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('');
+    if(actual!=='__MAC_APP_SHA256__')throw Error('安装器校验失败，请更新 Jira Monitor 后重新导出。未生成安装文件。');
+    const template=JSON.parse(atob(encoded));resolve(template);
+   }catch(error){reject(error);}},
+   onerror:()=>reject(Error('无法下载 Mac 安装器，请检查 GitHub 连接后重试。')),
+   ontimeout:()=>reject(Error('Mac 安装器下载超时，请重试。'))});
+ }).catch(error=>{macTemplatePromise=null;throw error;});
+ return macTemplatePromise;
+}
 // A stored ZIP preserves Unix executable permissions, unlike a downloaded .command file.
-function macAppArchive(installer){
+async function macAppArchive(installer){
  const encoder=new TextEncoder(),folder='Jira Monitor Installer.app/Contents/';
- const template=JSON.parse(atob('__MAC_APP_TEMPLATE_BASE64__'));
+ const template=await loadMacAppTemplate();
  // Keep signed app contents immutable; schedule payload stays beside the app.
  const files=template.map(([path,data,mode])=>[folder+path,Uint8Array.from(atob(data),c=>c.charCodeAt(0)),mode]);
  files.push(['Jira-Monitor-Schedule.sh',encoder.encode(installer),0o100644]);

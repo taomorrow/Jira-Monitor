@@ -1,4 +1,4 @@
-# Jira Monitor v6.9.2
+# Jira Monitor v6.9.3
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -148,3 +148,7 @@ Jira 详情独立浮窗不再显示邮件预览及交互报告导出按钮。详
 ## v6.9.2：原生 Mac 启动入口
 
 安装器改用 arm64 / x86_64 通用 Mach-O 原生程序作为应用入口，避免将 Shell 文件当作可双击的应用执行。原生入口只定位安装资源并启动系统 osascript，不修改系统安全策略。源码见 `native/mac-launcher.c`，可在 Mac 用 `python3 scripts/build_mac_launcher.py` 重建。完整静态应用包仅有 ad-hoc 完整性签名，并非 Developer ID 签名或 Apple 公证；仍可能需要系统“隐私与安全性”确认，不能保证公司策略允许执行。
+
+## v6.9.3：安装器按需加载
+
+Mac 应用二进制不再内嵌在用户脚本里，仅点击“导出 Mac 定时启动器”时从仓库下载并核对 SHA-256；失败不生成文件，可重试。普通 Jira 页面加载、打开配置中心和 Job 执行均不下载安装器。Job 无后台分钟轮询，只有带 Job 标记的启动页面才执行。安装器的下载需求不影响已安装的 Mac 定时任务。脚本从约 461 KB 缩减至约 246 KB。此优化减少扩展解析负担，但不能据此认定或保证修复油猴整个弹出面板无法打开的问题。
