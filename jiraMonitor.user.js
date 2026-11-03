@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.9.3
+// @version      6.9.4
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -47,7 +47,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.9.3',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.9.4',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
@@ -290,11 +290,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.9.3 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.9.4 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.9.3 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.9.4 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -713,13 +713,22 @@ function initTimeout(detailOnly){
   }
   function devOwnerLabel(item){return item.devAssignees?.map(u=>u.name).join('、')||(item.devAssignees?'子任务暂无已分配负责人':'请重新扫描子任务负责人');}
   function scanOwnerLabel(item){const dev=(item.rules||[]).some(r=>norm(r.name)==='DEV'&&Number.isFinite(r.seconds)),other=(item.rules||[]).some(r=>norm(r.name)!=='DEV'&&Number.isFinite(r.seconds));return dev?'DEV 子任务：'+devOwnerLabel(item)+(other?'；DCT：'+(item.assignee||'未分配'):''):(item.assignee||'未分配');}
-  // All DEV recipients come from Subtasks; never substitute the Story owner.
+  const bugIssueType=type=>/^(bug|缺陷|错误)$/i.test(String(type?.name||'').trim());
+  const subtaskIssueType=type=>!bugIssueType(type)&&(type?.subtask===true||/^(subtask|子任务)$/i.test(String(type?.name||'').replace(/[\s_-]/g,'')));
+  // Only verified Subtasks contribute DEV owners; never related Bugs or the Story owner.
   async function subtaskAssignees(fields,checkpoint){
-    const users=new Map();
-    for(const subtask of fields.subtasks||[]){
-      checkpoint();let assignee=subtask.fields?.assignee;
-      if(assignee===undefined){const data=await api('/rest/api/2/issue/'+encodeURIComponent(subtask.key)+'?fields=assignee');checkpoint();if(!data.fields||!Object.hasOwn(data.fields,'assignee'))throw Error(subtask.key+' 未返回子任务负责人');assignee=data.fields.assignee;}
-      if(!assignee)continue;
+    const users=new Map(),children=subtaskIssueType(fields.issuetype)?[{fields}]:fields.subtasks||[];
+    for(const child of children){
+      checkpoint();let data=child.fields||{},type=data.issuetype;
+      if(type&&!subtaskIssueType(type))continue;
+      if(!type||data.assignee===undefined){
+        if(!child.key)throw Error('Sub-task 缺少工单编号，无法读取负责人');
+        const issue=await api('/rest/api/2/issue/'+encodeURIComponent(child.key)+'?fields=assignee,issuetype');checkpoint();data=issue.fields||{};type=data.issuetype;
+        if(!type)throw Error(child.key+' 未返回工单类型，无法确认 Sub-task');
+        if(!subtaskIssueType(type))continue;
+      }
+      if(!Object.hasOwn(data,'assignee'))throw Error((child.key||'Sub-task')+' 未返回子任务负责人');
+      const assignee=data.assignee;if(!assignee)continue;
       const user={name:assignee.displayName||assignee.name||assignee.emailAddress||'未命名用户',account:assignee.accountId||assignee.name||assignee.key||'',email:assignee.emailAddress||''};
       const id=String(user.email||user.account||user.name).toLowerCase();if(!users.has(id))users.set(id,user);
     }
@@ -887,7 +896,8 @@ function initTimeout(detailOnly){
   async function issueHistory(key,checkpoint=()=>{}){
     checkpoint();
     const data=await api('/rest/api/2/issue/'+encodeURIComponent(key)+'?fields=assignee,status,summary,issuetype,subtasks&expand=changelog');
-    checkpoint();let histories=data.changelog?.histories;
+    checkpoint();if(bugIssueType(data.fields?.issuetype))return {excluded:true,issueType:data.fields.issuetype.name};
+    let histories=data.changelog?.histories;
     if(!Array.isArray(histories))throw new Error('接口未返回 changelog');
     const total=data.changelog.total;
     if(!Number.isInteger(total)||data.changelog.startAt>0||histories.length<total){
@@ -937,7 +947,7 @@ function initTimeout(detailOnly){
     }
     if(found.size!==total)throw new Error('搜索分页存在重复或遗漏，请重试');
     const rules=valid(id,token).rules;
-    const queue=[...found.values()].filter(x=>rules.some(r=>r.currentStatuses.map(norm).includes(norm(x.fields?.status?.name)))).map(x=>({key:x.key,summary:x.fields?.summary||'',currentStatus:x.fields?.status?.name||'',assignee:x.fields?.assignee===null?'未分配':x.fields?.assignee?.displayName||'',href:location.origin+'/browse/'+x.key}));
+    const queue=[...found.values()].filter(x=>!bugIssueType(x.fields?.issuetype)).filter(x=>rules.some(r=>r.currentStatuses.map(norm).includes(norm(x.fields?.status?.name)))).map(x=>({key:x.key,summary:x.fields?.summary||'',currentStatus:x.fields?.status?.name||'',assignee:x.fields?.assignee===null?'未分配':x.fields?.assignee?.displayName||'',href:location.origin+'/browse/'+x.key}));
     return {queue,total,jql};
   }
   async function continueCollection(){
@@ -962,6 +972,7 @@ function initTimeout(detailOnly){
     // made changes 的相对时间会舍入；读取同一 History 的 REST created 时间，避免把 Yesterday/17 minutes ago 当成精确日期。
     const data=await issueHistory(keyOf(location.href),()=>valid(id,token));
     const s=valid(id,token),now=Date.now();
+    if(data.excluded)return {excluded:true};
     return {checkedAt:now,devAssignees:data.devAssignees,assigneeEmail:data.assigneeEmail,assigneeAccount:data.assigneeAccount,rules:evaluateHistory(data.events,data.status,s.rules,now),assignee:data.assignee||readAssignee()||s.queue[s.index]?.assignee||'',summary:data.summary,currentStatus:data.status,source:data.source};
   }
   let dashboardDiagnostics='';
@@ -1075,7 +1086,8 @@ function initTimeout(detailOnly){
         const item=state.queue[state.index];update(`接口读取 ${item.key}（${state.index+1}/${state.queue.length}）…`);
         const data=await issueHistory(item.key,()=>valid(id,token));
         const current=valid(id,token),now=Date.now();
-        const result={...item,summary:data.summary,assignee:data.assignee,devAssignees:data.devAssignees,assigneeEmail:data.assigneeEmail,assigneeAccount:data.assigneeAccount,currentStatus:data.status,checkedAt:now,source:data.source,rules:evaluateHistory(data.events,data.status,current.rules,now)};
+        if(data.excluded){current.index++;current.skippedBugs=(current.skippedBugs||0)+1;current.message=item.key+' 为 Bug，已跳过';save(current);render();continue;}
+        const result={...item,issueType:data.issueType,summary:data.summary,assignee:data.assignee,devAssignees:data.devAssignees,assigneeEmail:data.assigneeEmail,assigneeAccount:data.assigneeAccount,currentStatus:data.status,checkedAt:now,source:data.source,rules:evaluateHistory(data.events,data.status,current.rules,now)};
         current.results.push(result);current.index++;current.phase='reading';current.message=`接口扫描 ${current.index}/${current.queue.length} · ${item.key}`;
         // Persist the completed item before notification, so pause/reload cannot count it twice.
         save(current);render();
@@ -1134,6 +1146,7 @@ function initTimeout(detailOnly){
         let result;
         try{result=await inspect(s.id,token);}catch(e){if(e.message==='CANCELLED')return;result={status:'读取失败',max:null,details:e.message};}
         s=valid(s.id,token);
+        if(result.excluded){s.index++;s.active=false;s.phase='done';s.message=item.key+' 为 Bug，已跳过，不参与 COE 统计和通知';save(s);render();return;}
         s.results.push({...item,summary:readSummary()||item.summary,assignee:readAssignee()||item.assignee||'',...result});s.index++;
         save(s);await autoNotifyOverview(s.results[s.results.length-1],s.rules);s=valid(s.id,token);
         if(s.mode==='single'){
@@ -1254,7 +1267,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.9.3 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.9.4 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);

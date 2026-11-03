@@ -1,12 +1,21 @@
   function devOwnerLabel(item){return item.devAssignees?.map(u=>u.name).join('、')||(item.devAssignees?'子任务暂无已分配负责人':'请重新扫描子任务负责人');}
   function scanOwnerLabel(item){const dev=(item.rules||[]).some(r=>norm(r.name)==='DEV'&&Number.isFinite(r.seconds)),other=(item.rules||[]).some(r=>norm(r.name)!=='DEV'&&Number.isFinite(r.seconds));return dev?'DEV 子任务：'+devOwnerLabel(item)+(other?'；DCT：'+(item.assignee||'未分配'):''):(item.assignee||'未分配');}
-  // All DEV recipients come from Subtasks; never substitute the Story owner.
+  const bugIssueType=type=>/^(bug|缺陷|错误)$/i.test(String(type?.name||'').trim());
+  const subtaskIssueType=type=>!bugIssueType(type)&&(type?.subtask===true||/^(subtask|子任务)$/i.test(String(type?.name||'').replace(/[\s_-]/g,'')));
+  // Only verified Subtasks contribute DEV owners; never related Bugs or the Story owner.
   async function subtaskAssignees(fields,checkpoint){
-    const users=new Map();
-    for(const subtask of fields.subtasks||[]){
-      checkpoint();let assignee=subtask.fields?.assignee;
-      if(assignee===undefined){const data=await api('/rest/api/2/issue/'+encodeURIComponent(subtask.key)+'?fields=assignee');checkpoint();if(!data.fields||!Object.hasOwn(data.fields,'assignee'))throw Error(subtask.key+' 未返回子任务负责人');assignee=data.fields.assignee;}
-      if(!assignee)continue;
+    const users=new Map(),children=subtaskIssueType(fields.issuetype)?[{fields}]:fields.subtasks||[];
+    for(const child of children){
+      checkpoint();let data=child.fields||{},type=data.issuetype;
+      if(type&&!subtaskIssueType(type))continue;
+      if(!type||data.assignee===undefined){
+        if(!child.key)throw Error('Sub-task 缺少工单编号，无法读取负责人');
+        const issue=await api('/rest/api/2/issue/'+encodeURIComponent(child.key)+'?fields=assignee,issuetype');checkpoint();data=issue.fields||{};type=data.issuetype;
+        if(!type)throw Error(child.key+' 未返回工单类型，无法确认 Sub-task');
+        if(!subtaskIssueType(type))continue;
+      }
+      if(!Object.hasOwn(data,'assignee'))throw Error((child.key||'Sub-task')+' 未返回子任务负责人');
+      const assignee=data.assignee;if(!assignee)continue;
       const user={name:assignee.displayName||assignee.name||assignee.emailAddress||'未命名用户',account:assignee.accountId||assignee.name||assignee.key||'',email:assignee.emailAddress||''};
       const id=String(user.email||user.account||user.name).toLowerCase();if(!users.has(id))users.set(id,user);
     }

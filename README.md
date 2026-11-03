@@ -1,4 +1,4 @@
-# Jira Monitor v6.9.3
+# Jira Monitor v6.9.4
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -152,3 +152,7 @@ Jira 详情独立浮窗不再显示邮件预览及交互报告导出按钮。详
 ## v6.9.3：安装器按需加载
 
 Mac 应用二进制不再内嵌在用户脚本里，仅点击“导出 Mac 定时启动器”时从仓库下载并核对 SHA-256；失败不生成文件，可重试。普通 Jira 页面加载、打开配置中心和 Job 执行均不下载安装器。Job 无后台分钟轮询，只有带 Job 标记的启动页面才执行。安装器的下载需求不影响已安装的 Mac 定时任务。脚本从约 461 KB 缩减至约 246 KB。此优化减少扩展解析负担，但不能据此认定或保证修复油猴整个弹出面板无法打开的问题。
+
+## v6.9.4：COE 排除 Bug、核对子任务类型
+
+COE 批量收集时排除 Bug，逐条 REST 读取时再次核对，详情中的 Bug 也跳过，不进入结果、Excel、报告或通知。DEV 读取 Story 下属条目时只接受 Sub-task / Subtask（或 Jira 明确标记 subtask=true 的非 Bug 类型）；Bug 及其他普通类型不参与负责人收集。条目缺少类型时按编号补取类型和负责人，无法确认类型时暂停而非猜测。直接扫描 Sub-task 时使用该 Sub-task 自身负责人；Story 的 DEV 仍从已确认子任务收集并去重，DCT 保持原负责人规则。升级前旧结果请停止后重新扫描。

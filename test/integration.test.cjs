@@ -236,8 +236,8 @@ test('DEV reads and deduplicates Subtask owners and mentions them all, never the
  // Controller loads rules when starting the next scan.
  const issue=apiIssue('CSP-1');issue.changelog.histories[0].created=new Date(Date.now()-30*86400000).toISOString();issue.fields.assignee={displayName:'Story Owner',emailAddress:'parent@example.com',name:'parent'};
  const alice={displayName:'Alice',emailAddress:'alice@example.com',name:'alice'},bob={displayName:'Bob',emailAddress:'bob@example.com',name:'bob'};
- issue.fields.subtasks=[{key:'CSP-11',fields:{assignee:alice}},{key:'CSP-12',fields:{assignee:{...alice,emailAddress:'ALICE@example.com'}}},{key:'CSP-13',fields:{}},{key:'CSP-14',fields:{assignee:null}}];
- const calls=[];w.fetch=async path=>{calls.push(path);if(path==='/rest/api/2/search')return response({total:1,issues:[issue]});if(path.includes('/CSP-13?'))return response({fields:{assignee:bob}});return response(issue);};
+ issue.fields.subtasks=[{key:'CSP-11',fields:{issuetype:{name:'Sub-task',subtask:true},assignee:alice}},{key:'CSP-12',fields:{issuetype:{name:'Subtask'},assignee:{...alice,emailAddress:'ALICE@example.com'}}},{key:'CSP-13',fields:{}},{key:'CSP-14',fields:{issuetype:{name:'Sub-task'},assignee:null}}];
+ const calls=[];w.fetch=async path=>{calls.push(path);if(path==='/rest/api/2/search')return response({total:1,issues:[issue]});if(path.includes('/CSP-13?'))return response({fields:{issuetype:{name:'Sub-task',subtask:true},assignee:bob}});return response(issue);};
  root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done'&&!root.querySelector('[data-start]').disabled);
  const result=job(f).results[0];assert.deepEqual(result.devAssignees.map(u=>u.name),['Alice','Bob']);assert.ok(calls.some(p=>p.includes('subtasks')));assert.ok(calls.some(p=>p.includes('/CSP-13?fields=assignee')));
  // Isolate the DEV alert in the snapshot to verify that DCT does not add the parent recipient.
@@ -375,4 +375,29 @@ test('native installer data is absent at startup; export rejects bad checksums a
  const f=boot();let calls=0,downloads=0;f.w.URL.createObjectURL=()=>{downloads++;return 'blob:test';};f.w.HTMLAnchorElement.prototype.click=()=>{};Object.defineProperty(f.w.crypto,'subtle',{value:require('node:crypto').webcrypto.subtle});
  f.w.GM_xmlhttpRequest=request=>{calls++;assert.equal(request.method,'GET');queueMicrotask(()=>request.onload(calls===1?{status:200,responseText:'corrupted'}:{status:200,responseText:fs.readFileSync(__dirname+'/../src/mac-app-template.base64','utf8')}));};
  f.hub.querySelector('#nav-settings').click();assert.equal(calls,0);const input=f.hub.querySelector('[data-job-field="enabled"]');input.checked=true;const buttons=[...f.hub.querySelector('#scheduled-jobs').querySelectorAll('button')];buttons.find(x=>x.textContent==='保存 Job 配置').click();const button=buttons.find(x=>x.textContent==='导出 Mac 定时启动器');button.click();await until(()=>!button.disabled);assert.equal(downloads,0);assert.match(f.hub.querySelector('#scheduled-jobs').textContent,/校验失败/);button.click();await until(()=>!button.disabled);assert.equal(calls,2);assert.equal(downloads,1);assert.equal(f.requests.length,0);f.dom.window.close();
+});
+
+test('COE excludes Bugs, reads only verified Subtasks and uses a directly scanned Subtask owner',async()=>{
+ const f=boot(),w=f.w,root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot,calls=[];
+ const make=(key,type,name)=>{const issue=apiIssue(key);issue.fields.issuetype={name:type,subtask:type==='Sub-task'};issue.fields.assignee={displayName:name,emailAddress:name.toLowerCase()+'@example.com'};issue.changelog.histories[0].created=new Date(Date.now()-30*86400000).toISOString();return issue;};
+ const story=make('CSP-1','Story','Parent'),subtask=make('CSP-4046','Sub-task','Developer'),bug=make('CSP-3936','Bug','BugOwner');
+ story.fields.subtasks=[{key:'CSP-11',fields:{issuetype:{name:'Sub-task',subtask:true},assignee:{displayName:'Alice',emailAddress:'alice@example.com'}}},{key:'CSP-12',fields:{issuetype:{name:'Bug',subtask:true},assignee:{displayName:'BugOwner',emailAddress:'bugowner@example.com'}}},{key:'CSP-13',fields:{issuetype:{name:'Task'},assignee:{displayName:'Other',emailAddress:'other@example.com'}}},{key:'CSP-14',fields:{assignee:{displayName:'UnknownBug'}}},{key:'CSP-15',fields:{}}];
+ w.fetch=async path=>{calls.push(path);if(path==='/rest/api/2/search')return response({total:3,issues:[story,bug,subtask]});if(path.includes('/CSP-14?'))return response({fields:{issuetype:{name:'Bug'},assignee:{displayName:'HiddenBug'}}});if(path.includes('/CSP-15?'))return response({fields:{issuetype:{name:'Subtask'},assignee:{displayName:'Bob',emailAddress:'bob@example.com'}}});return response([story,subtask,bug].find(i=>path.includes('/'+i.key+'?')));};
+ root.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done'&&!root.querySelector('[data-start]').disabled);assert.deepEqual(job(f).results.map(x=>x.key),['CSP-1','CSP-4046']);assert.deepEqual(job(f).results[0].devAssignees.map(x=>x.name),['Alice','Bob']);assert.deepEqual(job(f).results[1].devAssignees.map(x=>x.name),['Developer']);assert.equal(calls.some(p=>/CSP-(3936|12|13)\?/.test(p)),false);assert.equal(calls.filter(p=>p.includes('/CSP-14?')).length,1);assert.doesNotMatch(root.querySelector('[data-results]').textContent,/CSP-3936|BugOwner|HiddenBug|Other/);
+ root.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const payload=JSON.parse(f.requests[0].data);assert.deepEqual(payload.items.map(x=>x.jiraKey),['CSP-1','CSP-4046']);assert.doesNotMatch(JSON.stringify(payload),/CSP-3936|BugOwner|HiddenBug|other@example/);const report=Buffer.from(payload.email.attachments[0].contentBytes,'base64').toString();assert.doesNotMatch(report,/CSP-3936|BugOwner/);f.requests[0].onload({status:202});await until(()=>!root.querySelector('[data-start]').disabled);f.dom.window.close();
+});
+
+test('Dashboard and detail skip Bug issues even when no changelog was returned',async()=>{
+ for(const detail of [false,true]){
+ const f=boot(detail?'/browse/CSP-3936':'/secure/Dashboard.jspa',{auto:detail,setup(w){if(!detail){const a=w.document.createElement('a');a.href='/browse/CSP-3936';a.textContent='Bug';w.document.body.append(a);}w.fetch=async()=>response({fields:{issuetype:{name:'Bug'},summary:'Bug excluded'}});}});
+ if(detail){await until(()=>f.w.sessionStorage.getItem('jira-monitor-auto-detail-v1')&&JSON.parse(f.w.sessionStorage.getItem('jira-monitor-auto-detail-v1')).phase==='done');const state=JSON.parse(f.w.sessionStorage.getItem('jira-monitor-auto-detail-v1'));assert.equal(state.results.length,0);assert.match(state.message,/Bug，已跳过/);}
+ else{f.hub.querySelector('#jira-duration-panel-host').shadowRoot.querySelector('[data-start]').click();await until(()=>job(f)?.phase==='done');assert.equal(job(f).results.length,0);assert.equal(job(f).skippedBugs,1);}
+ assert.equal(f.requests.length,0);f.dom.window.close();
+ }
+});
+
+test('missing child issue type pauses COE instead of treating an unknown child as Subtask',async()=>{
+ const f=boot(),root=f.hub.querySelector('#jira-duration-panel-host').shadowRoot,story=apiIssue('CSP-1');story.fields.issuetype={name:'Story'};story.fields.subtasks=[{key:'CSP-11',fields:{}}];
+ f.w.fetch=async path=>response(path==='/rest/api/2/search'?{total:1,issues:[story]}:path.includes('/CSP-11?')?{fields:{assignee:{displayName:'Unknown'}}}:story);
+ root.querySelector('[data-start]').click();await until(()=>job(f)?.paused);assert.equal(job(f).results.length,0);assert.match(job(f).message,/未返回工单类型/);assert.equal(f.requests.length,0);f.dom.window.close();
 });

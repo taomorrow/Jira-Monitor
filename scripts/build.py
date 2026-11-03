@@ -3,12 +3,12 @@ import hashlib
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.9.3').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.9.4').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      api.powerplatform.com','// @connect      api.powerplatform.com\n// @connect      raw.githubusercontent.com')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.9.3')
+t=t[t.index('(function ()'):].replace('5.5.4','6.9.4')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -82,7 +82,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.9.3',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.9.4',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -198,6 +198,11 @@ s=s.replace('<legend>推送项目（可多选）</legend>', '<legend>通知项�
 # Replace inline drilldown with a separate, searchable dialog for both analysis modules.
 a=s.index('  function details(title,items){');b=s.index('  function render(){',a)
 s=s[:a]+"  function details(title,items){hub.showIssueDetails(title,items,activePeriod); }\n"+s[b:]
+# Exclude Bugs before history scanning where type metadata is available, and recheck REST results.
+t=t.replace('const queue=[...found.values()].filter(x=>rules.some', 'const queue=[...found.values()].filter(x=>!bugIssueType(x.fields?.issuetype)).filter(x=>rules.some')
+t=t.replace("    checkpoint();let histories=data.changelog?.histories;", "    checkpoint();if(bugIssueType(data.fields?.issuetype))return {excluded:true,issueType:data.fields.issuetype.name};\n    let histories=data.changelog?.histories;")
+t=t.replace('const s=valid(id,token),now=Date.now();\n    return {checkedAt:', 'const s=valid(id,token),now=Date.now();\n    if(data.excluded)return {excluded:true};\n    return {checkedAt:')
+t=t.replace('        s.results.push({...item,', "        if(result.excluded){s.index++;s.active=false;s.phase='done';s.message=item.key+' 为 Bug，已跳过，不参与 COE 统计和通知';save(s);render();return;}\n        s.results.push({...item,")
 # Fetch Subtask owners as part of the same cancellable scan transaction.
 t=t.replace('fields=assignee,status,summary,issuetype&expand=changelog','fields=assignee,status,summary,issuetype,subtasks&expand=changelog')
 t=t.replace("    return {events,issueType:", "    const devRule=CONFIG.rules.find(r=>norm(r.name)==='DEV');const devAssignees=devRule?.currentStatuses.map(norm).includes(norm(fields.status.name))?await subtaskAssignees(fields,checkpoint):[];checkpoint();\n    return {devAssignees,events,issueType:")
