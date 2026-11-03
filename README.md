@@ -1,4 +1,4 @@
-# Jira Monitor v6.9.0
+# Jira Monitor v6.9.1
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -137,6 +137,10 @@ Jira 详情独立浮窗不再显示邮件预览及交互报告导出按钮。详
 
 配置中心增加 Job，支持每日多个时间（例如 `09:00,21:00`）、每天/工作日、COE / Sprint / Epic 多选、日/周对比、通知项目、Teams / 邮件独立开关及邮件报告。默认页面是 `https://jira.xpaas.lenovo.com/issues/?filter=180929`，初始 Job 未启用且不自动发送，保存并启用后生效。
 
-配置中心可导出 Mac `.command` 安装器，使用用户级 LaunchAgent 在选定时间打开已安装脚本的浏览器。安装时不会立即运行 Job。时间使用 Mac 系统时区；修改时间、页面或启用任务列表后需要重新导出安装。脚本按保存配置执行内部功能，无需模拟菜单点击。详细步骤见 [JOBS.md](JOBS.md)。
+配置中心可导出 Mac `.app` 安装器（ZIP 下载），使用用户级 LaunchAgent 在选定时间打开已安装脚本的浏览器。安装时不会立即运行 Job。时间使用 Mac 系统时区；修改时间、页面或启用任务列表后需要重新导出安装。脚本按保存配置执行内部功能，无需模拟菜单点击。详细步骤见 [JOBS.md](JOBS.md)。
 
 同一 Jira 站点的 Job 串行执行；同一 Job 同一时间点仅运行一次。失败不自动重试，配置中心保留最后状态。Job 的 COE 通知使用 Job 自身的发送开关，避免与原批量自动通知重复发送，且不受其 24 小时冷却阻挡早晚各一次；项目仍须启用且配置 Webhook/收件人。配置“仅邮件”须配合工作流的 email-only 跳过 Teams 判断。验证只使用模拟接口，未安装真实 LaunchAgent、未访问该私有 Jira、未发送真实通知。
+
+## v6.9.1：双击安装 Mac 定时任务
+
+“导出 Mac 定时启动器”现在下载 ZIP，双击解压后双击 `Jira Monitor Installer.app`，点击“安装”，完成后弹窗提示，不再要求手动打开终端或输入命令。ZIP 保留应用入口的可执行权限。应用未经过 Apple 公证，首次打开可能需要在系统设置“隐私与安全性”确认；不自动绕过系统检查。

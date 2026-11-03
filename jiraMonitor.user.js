@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.9.0
+// @version      6.9.1
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -46,7 +46,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.9.0',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.9.1',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
@@ -132,6 +132,34 @@ hub.showIssueDetails=(title,items,period)=>{
   const body=add('main',null,panel),search=add('input',null,body);search.placeholder='搜索 Jira 编号、摘要或状态';search.setAttribute('aria-label','筛选工单明细');const count=add('small',null,body),table=add('table',null,body),head=add('thead',null,table),tr=add('tr',null,head);['Jira','摘要',period.before+' → '+period.after].forEach(x=>add('th',x,tr));const rows=add('tbody',null,table);
   const render=()=>{rows.replaceChildren();const query=search.value.trim().toLowerCase(),filtered=items.filter(x=>[x.issue.key,x.issue.fields.summary,x.before?.name,x.after?.name].join(' ').toLowerCase().includes(query));count.textContent=filtered.length+' / '+items.length+' 条';for(const x of filtered){const row=add('tr',null,rows),cell=add('td',null,row),a=add('a',x.issue.key,cell);a.href=location.origin+'/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';add('td',x.issue.fields.summary||'',row);add('td',(x.before?.name||'尚未创建')+' → '+(x.after?.name||'尚未创建'),row);}};search.oninput=render;render();close.focus();
 };
+// A stored ZIP preserves Unix executable permissions, unlike a downloaded .command file.
+function macAppArchive(installer){
+ const encoder=new TextEncoder(),folder='Jira Monitor Installer.app/Contents/';
+ const plist='<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>CFBundleExecutable</key><string>JiraMonitorInstaller</string><key>CFBundleIdentifier</key><string>com.taomorrow.jira-monitor.installer</string><key>CFBundleName</key><string>Jira Monitor Installer</string><key>CFBundleDisplayName</key><string>Jira Monitor 定时任务安装器</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1</string><key>LSUIElement</key><true/></dict></plist>';
+ const launcher='#!/bin/bash\nset -e\napp_dir="$(/usr/bin/dirname "$0")/.."\nexport JM_INSTALL_SCRIPT="$app_dir/Resources/install.sh"\nexec /usr/bin/osascript "$app_dir/Resources/install.applescript"\n';
+ const script=`try
+  display dialog "将安装或更新 Jira Monitor 定时任务。使用你导出时选择的时间和浏览器。" with title "Jira Monitor" buttons {"取消", "安装"} default button "安装" cancel button "取消"
+  set installerPath to system attribute "JM_INSTALL_SCRIPT"
+  do shell script "/bin/bash " & quoted form of installerPath
+  display dialog "定时任务已安装。请保持 Mac 唤醒、Jira 登录有效。" with title "Jira Monitor" buttons {"完成"} default button "完成"
+on error errorMessage number errorNumber
+  if errorNumber is not -128 then
+    display dialog "安装未完成：" & errorMessage with title "Jira Monitor" buttons {"关闭"} default button "关闭" with icon stop
+  end if
+end try
+`;
+ const files=[['Info.plist',plist,0o100644],['MacOS/JiraMonitorInstaller',launcher,0o100755],['Resources/install.applescript',script,0o100644],['Resources/install.sh',installer,0o100644]];
+ const crc32=bytes=>{let crc=0xffffffff;for(const b of bytes){crc^=b;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
+ const chunks=[],directory=[];let offset=0;
+ for(const [path,content,mode] of files){
+  const name=encoder.encode(folder+path),data=encoder.encode(content),crc=crc32(data),header=new Uint8Array(30+name.length),h=new DataView(header.buffer);
+  h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x800,true);h.setUint16(12,0x21,true);h.setUint32(14,crc,true);h.setUint32(18,data.length,true);h.setUint32(22,data.length,true);h.setUint16(26,name.length,true);header.set(name,30);
+  const central=new Uint8Array(46+name.length),c=new DataView(central.buffer);c.setUint32(0,0x02014b50,true);c.setUint16(4,0x0314,true);c.setUint16(6,20,true);c.setUint16(8,0x800,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint16(28,name.length,true);c.setUint32(38,(mode<<16)>>>0,true);c.setUint32(42,offset,true);central.set(name,46);
+  chunks.push(header,data);directory.push(central);offset+=header.length+data.length;
+ }
+ const size=directory.reduce((n,c)=>n+c.length,0),end=new Uint8Array(22),e=new DataView(end.buffer);e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,size,true);e.setUint32(16,offset,true);
+ const archive=new Uint8Array(offset+size+end.length);let index=0;for(const chunk of [...chunks,...directory,end]){archive.set(chunk,index);index+=chunk.length;}return archive;
+}
 // Scheduled jobs contain references and preferences only; never credentials.
 const JOB_STORE='jira-monitor-jobs-v1',JOB_LOG='jira-monitor-job-runs-v1';
 hub.jobRunners={};
@@ -213,7 +241,7 @@ hub.renderJobs=()=>{
  el('button','新增 Job',panel).onclick=()=>addJob({});
  el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);status.textContent='Job 已保存。首次使用或修改时间后，请导出并安装 Mac 启动器。';}catch(e){status.textContent=e.message;}};
  const browser=el('select',null,panel);for(const name of ['Google Chrome','Microsoft Edge']){const o=el('option',name,browser);o.value=name;}
- el('button','导出 Mac 定时启动器',panel).onclick=()=>{try{hub.downloadFile({name:'Jira-Monitor-安装定时任务.command',type:'text/plain;charset=utf-8',html:macInstaller(jobList(),browser.value)});status.textContent='已导出。打开终端，输入 bash 和一个空格，把下载的 .command 文件拖入终端，按回车。修改时间后重复此操作。';}catch(e){status.textContent=e.message;}};
+ el('button','导出 Mac 定时启动器',panel).onclick=()=>{try{hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:macAppArchive(macInstaller(jobList(),browser.value))});status.textContent='已导出。双击 ZIP 解压，再双击 Jira Monitor Installer.app，点击“安装”即可。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}};
  el('p','停用全部 Mac 启动任务：先在配置中心取消启用并保存（脚本立即停止执行）。删除系统任务的方法见仓库 JOBS.md。页面重复打开时同一时间点只执行一次；失败不自动重试，可查看 Job 日志后手动运行。',panel);
 };
 hub.startScheduled=()=>{
@@ -252,11 +280,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.9.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.9.1 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.9.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.9.1 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -1216,7 +1244,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.9.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.9.1 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
