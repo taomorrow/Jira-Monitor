@@ -79,7 +79,7 @@ hub.renderJobs=()=>{
  el('button','新增 Job',panel).onclick=()=>addJob({});
  el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);status.textContent='Job 已保存。首次使用或修改时间后，请导出并安装 Mac 启动器。';}catch(e){status.textContent=e.message;}};
  const browser=el('select',null,panel);for(const name of ['Google Chrome','Microsoft Edge']){const o=el('option',name,browser);o.value=name;}
- el('button','导出 Mac 定时启动器',panel).onclick=()=>{try{hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:macAppArchive(macInstaller(jobList(),browser.value))});status.textContent='已导出。双击 ZIP 解压，再双击 Jira Monitor Installer.app，点击“安装”即可。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}};
+ el('button','导出 Mac 定时启动器',panel).onclick=()=>{try{hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:macAppArchive(macInstaller(jobList(),browser.value))});status.textContent='已导出。双击 ZIP 解压，保持 .app 与 Jira-Monitor-Schedule.sh 在同一文件夹，再双击 .app 点击“安装”。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}};
  el('p','停用全部 Mac 启动任务：先在配置中心取消启用并保存（脚本立即停止执行）。删除系统任务的方法见仓库 JOBS.md。页面重复打开时同一时间点只执行一次；失败不自动重试，可查看 Job 日志后手动运行。',panel);
 };
 hub.startScheduled=()=>{

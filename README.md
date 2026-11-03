@@ -1,4 +1,4 @@
-# Jira Monitor v6.9.1
+# Jira Monitor v6.9.2
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -144,3 +144,7 @@ Jira 详情独立浮窗不再显示邮件预览及交互报告导出按钮。详
 ## v6.9.1：双击安装 Mac 定时任务
 
 “导出 Mac 定时启动器”现在下载 ZIP，双击解压后双击 `Jira Monitor Installer.app`，点击“安装”，完成后弹窗提示，不再要求手动打开终端或输入命令。ZIP 保留应用入口的可执行权限。应用未经过 Apple 公证，首次打开可能需要在系统设置“隐私与安全性”确认；不自动绕过系统检查。
+
+## v6.9.2：原生 Mac 启动入口
+
+安装器改用 arm64 / x86_64 通用 Mach-O 原生程序作为应用入口，避免将 Shell 文件当作可双击的应用执行。原生入口只定位安装资源并启动系统 osascript，不修改系统安全策略。源码见 `native/mac-launcher.c`，可在 Mac 用 `python3 scripts/build_mac_launcher.py` 重建。完整静态应用包仅有 ad-hoc 完整性签名，并非 Developer ID 签名或 Apple 公证；仍可能需要系统“隐私与安全性”确认，不能保证公司策略允许执行。

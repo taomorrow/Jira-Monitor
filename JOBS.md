@@ -2,7 +2,7 @@
 
 ## 先在配置中心设置
 
-1. 更新到 v6.9.1，刷新 Jira，点击蓝色星号 → 配置中心 → 定时 Job。
+1. 更新到 v6.9.2，刷新 Jira，点击蓝色星号 → 配置中心 → 定时 Job。
 2. 页面已预填 `https://jira.xpaas.lenovo.com/issues/?filter=180929`。
 3. 时间填写 `09:00,21:00`，表示早上 9 点、晚上 9 点。可继续用逗号添加时间。
 4. 选择“每天”或“周一至周五”，勾选需要的 COE、Sprint、Epic（可多选）。选择昨天/今天或上周/本周。
@@ -18,7 +18,7 @@
 1. 在 Job 下方选择安装了 Tampermonkey 和 Jira Monitor 的浏览器：Google Chrome 或 Microsoft Edge。
 2. 点击“导出 Mac 定时启动器”。
 3. 双击下载的 `Jira-Monitor-Mac-Installer.zip` 解压。
-4. 双击解压后的 **Jira Monitor Installer.app**，在弹窗中点击“安装”。
+4. 保持解压得到的 `.app` 与 `Jira-Monitor-Schedule.sh` 在同一文件夹，双击 **Jira Monitor Installer.app**，在弹窗中点击“安装”。
 5. 看到“定时任务已安装”弹窗即完成。无需打开终端、输入命令或管理员密码。
 
 此应用未经过 Apple 签名和公证。首次打开若被 macOS 拦截，请按系统提示进入 **系统设置 → 隐私与安全性 → 仍要打开**。系统或公司策略不允许时无法保证运行；不会自动绕过这些限制。参考 [Apple 官方说明](https://support.apple.com/en-gb/102445)。
@@ -62,3 +62,7 @@ done
 ```
 
 此操作只删除 Jira Monitor 导出的定时项，不删除脚本、项目配置或 Job 配置。
+
+如果旧版安装器打开了终端并显示 `killed`，请删除旧安装器后，用 v6.9.2 重新导出。双击最外层的 `Jira Monitor Installer.app`，不要打开“显示包内容”中的入口文件。新版使用 Intel / Apple Silicon 通用原生入口；系统验证提示仍按上面的官方流程处理。
+
+原生安装器的整个静态应用包使用 ad-hoc 完整性签名，计划内容独立保存在同目录的 `Jira-Monitor-Schedule.sh`，不会修改签名内资源。请保留两者在同一目录；如 Mac 隔离运行导致找不到文件，安装器会弹出选择文件窗口，选中该配置文件即可。完整性签名不代表 Apple 已认证开发者或完成公证。
