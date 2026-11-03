@@ -13,8 +13,9 @@
     return [...users.values()];
   }
   function teamsPayload(current,rulesConfig=CONFIG.rules,automatic=true,target=projectTarget(current.key)){
+    if(detailOnly||get()?.mode==='single')target={...target,recipients:[]};
     const base=baseTeamsPayload(current,rulesConfig,automatic,target),dev=base.rules.some(r=>norm(r.name)==='DEV'),other=base.rules.some(r=>norm(r.name)!=='DEV');
-    if(!dev){if(detailOnly||get()?.mode==='single')hub.attachEmailReport(base.email,hub.coeReportFile([{item:current,report:base}],projectKeyOf(current.key)));return base;}
+    if(!dev)return base;
     const users=[...(current.devAssignees||[])];
     if(other)users.push({name:current.assignee||'未分配',account:current.assigneeAccount||'',email:current.assigneeEmail||''});
     const unique=[...new Map(users.map(u=>[String(u.email||u.account||u.name).toLowerCase(),u])).values()];
@@ -23,5 +24,5 @@
     const entities=[],names=[];
     for(const user of unique){const mapped=CONFIG.teamsMentionUsers[user.account],mention=CONFIG.mentionAssignee&&(mapped?.id?mapped:user.email?{id:user.email,name:user.name}:null);if(mention){const name=String(mention.name||user.name).replace(/[<>]/g,''),text='<at>'+name+'</at>';if(!entities.some(e=>e.mentioned.id.toLowerCase()===String(mention.id).toLowerCase()))entities.push({type:'mention',text,mentioned:{id:String(mention.id),name}});names.push(text);}else names.push(user.name);}
     card.msteams.entities=entities;card.body[2].text='通知负责人：'+(names.join('、')||label);
-    payload.devAssignees=current.devAssignees||[];payload.assignee=label;if(detailOnly||get()?.mode==='single')hub.attachEmailReport(payload.email,hub.coeReportFile([{item:current,report:payload}],projectKeyOf(current.key)));return payload;
+    payload.devAssignees=current.devAssignees||[];payload.assignee=label;return payload;
   }

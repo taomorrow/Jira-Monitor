@@ -1,4 +1,4 @@
-# Jira Monitor v6.8.3
+# Jira Monitor v6.8.4
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -128,3 +128,7 @@ Teams 收到消息不等于邮件已投递。脚本只向 Webhook 提交 `email`
 ## v6.8.3：状态勾选及入口颜色
 
 Sprint / Epic 默认全选且显示所有状态勾选，支持全选、清空以及单项修改；推送按钮为蓝色填充，浮动入口为蓝色四角星。脚本报告文件名始终使用 `.html`；若邮件收到 `Monitor Details.txt`，请把 Mail V3“附件文件名”固定值改为表达式 `first(triggerBody()?['email']?['attachments'])?['name']`。附件内容继续使用对应 contentBytes 的 base64ToBinary 表达式。
+
+## v6.8.4：详情仅发送 Teams
+
+Jira 详情独立浮窗不再显示邮件预览及交互报告导出按钮。详情通知仅发送 Teams，载荷明确设置 `email.enabled=false`，不包含邮件正文或交互报告附件。保留分析、暂停、停止及 Excel 导出。批量 COE、Sprint 和 Epic 的邮件及报告功能不变。
