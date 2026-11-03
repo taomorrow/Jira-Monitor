@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.9.4
+// @version      6.10.0
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
+// @grant        GM_openInTab
 // @grant        GM_deleteValue
 // @grant        GM_setValue
 // @connect      api.powerplatform.com
@@ -47,7 +48,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.9.4',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.10.0',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
@@ -200,12 +201,12 @@ hub.deliveryPayload=payload=>{
 hub.jobProjectAllowed=key=>!hub.jobDelivery?.projects||hub.jobDelivery.projects.split('/').includes(key);
 async function executeJob(id,manual=false){
  const job=validJob(jobList().find(j=>j.id===id)||{});if(!job.enabled)throw Error('此 Job 尚未启用，请在配置中心勾选启用并保存。');
- const target=new URL(job.url),here=new URL(location.href);here.hash='';if(here.href!==target.href)throw Error('当前页面与 Job 查询不一致，请从 Job 的“立即运行”或 Mac 启动器打开。');
+ const target=new URL(job.url),here=new URL(location.href);here.hash='';if(here.href!==target.href)throw Error('当前页面与 Job 查询不一致，请从调度页或 Job 的“立即运行”打开。');
  const slot=manual?'手动 '+new Date().toISOString():jobSlot(job);if(!slot)throw Error('未到此 Job 的执行时间，或已超过 10 分钟启动窗口。');
  const execute=async()=>{
   const current=jobList().find(x=>x.id===id);if(!current?.enabled)return;
   if(JSON.stringify(validJob(current))!==JSON.stringify(job))throw Error('等待期间 Job 配置已变化，请重新打开。');
-  const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot)return;
+  const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
   jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;
   try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);}
@@ -232,7 +233,8 @@ function macInstaller(jobs,browser){
 }
 hub.macInstaller=macInstaller;
 hub.renderJobs=()=>{
- const panel=el('section',null,hub.settings);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','Mac 按本机时区打开查询页面，依次执行所选菜单。修改时间、页面或启用状态后，请重新导出并安装启动器。电脑需保持唤醒，Chrome 中已安装脚本且 Jira 登录有效。',panel);
+ const panel=el('section',null,hub.settings);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','在此配置 Job、时间和通知，保存后由固定 Jira 标签页调度。修改配置后自动生效，不需要导出安装器。',panel);
+ hub.renderBrowserScheduler(panel);
  const entries=[],list=el('div',null,panel),status=el('p',null,panel);status.setAttribute('role','status');
  const addJob=value=>{
   const card=el('fieldset',null,list);card.style.cssText='border:1px solid #dbe3f0;border-radius:10px;margin:12px 0;padding:14px;display:grid;gap:8px';
@@ -243,21 +245,85 @@ hub.renderJobs=()=>{
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
   el('small','分析当前查询全部分页；Sprint / Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
-  const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
+  const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
  };
  const stored=jobList();(stored.length?stored:[{}]).forEach(addJob);
  el('button','新增 Job',panel).onclick=()=>addJob({});
- el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);status.textContent='Job 已保存。首次使用或修改时间后，请导出并安装 Mac 启动器。';}catch(e){status.textContent=e.message;}};
- const browser=el('select',null,panel);for(const name of ['Google Chrome','Microsoft Edge']){const o=el('option',name,browser);o.value=name;}
- const exportMac=el('button','导出 Mac 定时启动器',panel);exportMac.onclick=async()=>{exportMac.disabled=true;status.textContent='正在下载并校验 Mac 安装器…';try{const installer=macInstaller(jobList(),browser.value);hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:await macAppArchive(installer)});status.textContent='已导出。双击 ZIP 解压，保持 .app 与 Jira-Monitor-Schedule.sh 在同一文件夹，再双击 .app 点击“安装”。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}finally{exportMac.disabled=false;}};
- el('p','停用全部 Mac 启动任务：先在配置中心取消启用并保存（脚本立即停止执行）。删除系统任务的方法见仓库 JOBS.md。页面重复打开时同一时间点只执行一次；失败不自动重试，可查看 Job 日志后手动运行。',panel);
+ el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);status.textContent='Job 已保存，固定标签页在下一次检查时读取新配置。请点击“设此标签页为调度页”，并保留该标签。';}catch(e){status.textContent=e.message;}};
+ const advanced=el('details',null,panel);el('summary','高级：旧 Mac 系统调度（固定标签方式不需要）',advanced);
+ const browser=el('select',null,advanced);for(const name of ['Google Chrome','Microsoft Edge']){const o=el('option',name,browser);o.value=name;}
+ const exportMac=el('button','导出 Mac 定时启动器',advanced);exportMac.onclick=async()=>{exportMac.disabled=true;status.textContent='正在下载并校验 Mac 安装器…';try{const installer=macInstaller(jobList(),browser.value);hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:await macAppArchive(installer)});status.textContent='已导出。双击 ZIP 解压，保持 .app 与 Jira-Monitor-Schedule.sh 在同一文件夹，再双击 .app 点击“安装”。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}finally{exportMac.disabled=false;}};
+ el('p','停用全部 Mac 启动任务：先在配置中心取消启用并保存（脚本立即停止执行）。删除系统任务的方法见仓库 JOBS.md。页面重复打开时同一时间点只执行一次；失败不自动重试，可查看 Job 日志后手动运行。',advanced);
 };
 hub.startScheduled=()=>{
  const params=new URLSearchParams(location.hash.slice(1)),id=params.get('jm-job');if(!id)return;
  executeJob(id,params.get('jm-manual')==='1').catch(error=>{hub.configure?.();const p=el('p','Job 未完成：'+error.message,hub.settings);p.setAttribute('role','alert');});
 };
+// Opt-in dispatcher: only a retained Jira tab checks the local clock; analysis runs in separate tabs.
+const BROWSER_SCHEDULE='jira-monitor-browser-schedule-v1',BROWSER_DISPATCH='jira-monitor-browser-dispatch-v1',SCHEDULER_TAB='jira-monitor-scheduler-tab-v1';
+let browserScheduleTimer=null,browserScheduleBusy=false,browserScheduleLast='',browserScheduleError='';
+const initialPageTitle=document.title;
+const schedulerTab=()=>sessionStorage.getItem(SCHEDULER_TAB)==='1'&&!new URLSearchParams(location.hash.slice(1)).has('jm-job');
+function browserScheduleStatus(){
+ const n=hub.settings.querySelector('#browser-scheduler-status');if(!n)return;
+ const enabled=GM_getValue(BROWSER_SCHEDULE,false)===true;
+ n.textContent=!enabled?'浏览器调度已停止。':!schedulerTab()?'浏览器调度已启用；此标签不是调度页。请保留已设为调度页的 Jira 标签。':'此标签正在调度，请右键标签选择“固定”。'+(browserScheduleLast?' 最近检查：'+browserScheduleLast+'。':'')+(browserScheduleError?' '+browserScheduleError:'');
+}
+async function browserSchedulerTick(){
+ if(!schedulerTab()||GM_getValue(BROWSER_SCHEDULE,false)!==true){if(browserScheduleTimer!==null)clearInterval(browserScheduleTimer);browserScheduleTimer=null;if(schedulerTab())document.title=initialPageTitle;browserScheduleStatus();return;}
+ if(browserScheduleBusy)return;
+ browserScheduleBusy=true;browserScheduleError='';
+ try{
+  if(!navigator.locks?.request)throw Error('浏览器不支持防重复锁，请使用新版 Chrome。');
+  await navigator.locks.request('jira-monitor-browser-dispatch',{ifAvailable:true},async lock=>{
+   if(!lock||!schedulerTab()||GM_getValue(BROWSER_SCHEDULE,false)!==true)return;
+   const records=GM_getValue(BROWSER_DISPATCH,{}),now=new Date();
+   for(const raw of jobList()){
+    if(!raw.enabled)continue;
+    let job;try{job=validJob(raw);}catch(error){browserScheduleError='有 Job 配置无效：'+error.message;continue;}
+    const slot=jobSlot(job,now);if(!slot)continue;
+    const last=GM_getValue(JOB_LOG,{})[job.id];
+    if(records[job.id]?.slot===slot||last?.slot===slot)continue;
+    // Claim before opening; a second fixed tab cannot open the same slot again.
+    records[job.id]={slot,openedAt:now.toISOString()};GM_setValue(BROWSER_DISPATCH,records);
+    jobLog(job.id,{slot,status:'queued',message:'调度页已打开任务标签，等待运行；若一直等待，请检查油猴启用及 Jira 登录。'});
+    try{
+     if(typeof GM_openInTab!=='function')throw Error('缺少打开标签权限，请更新脚本并允许 GM_openInTab。');
+     const url=new URL(job.url);url.hash=new URLSearchParams({'jm-job':job.id}).toString();
+     const opened=GM_openInTab(url.href,{active:false,insert:true,setParent:false});
+     if(opened&&typeof opened.then==='function')await opened;
+    }catch(error){jobLog(job.id,{status:'failed',message:'无法打开任务页：'+error.message+'；未自动重试。'});browserScheduleError=error.message;}
+   }
+  });
+  browserScheduleLast=new Date().toLocaleTimeString('zh-CN',{hour12:false});
+ }catch(error){browserScheduleError=error.message;}
+ finally{browserScheduleBusy=false;browserScheduleStatus();}
+}
+hub.startBrowserScheduler=()=>{
+ if(browserScheduleTimer!==null)clearInterval(browserScheduleTimer);browserScheduleTimer=null;
+ if(!schedulerTab()||GM_getValue(BROWSER_SCHEDULE,false)!==true){browserScheduleStatus();return;}
+ document.title='◷ Jira Monitor 调度中';
+ // A low-frequency clock check does not fetch Jira data or run scans in the retained tab.
+ browserScheduleTimer=setInterval(()=>browserSchedulerTick(),30000);
+ void browserSchedulerTick();browserScheduleStatus();
+};
+hub.renderBrowserScheduler=panel=>{
+ const card=el('fieldset',null,panel);card.id='browser-scheduler';card.style.cssText='border:1px solid #dbe3f0;border-radius:10px;padding:12px;margin:12px 0;background:#edf3ff';
+ el('strong','固定标签页调度（推荐）',card);el('p','保留此 Jira 标签页即可，到点会自动新建后台任务标签。无需 Mac 安装器。使用本机时区；电脑需保持唤醒、Jira 登录有效。',card);
+ el('p',null,card).id='browser-scheduler-status';
+ const start=el('button','设此标签页为调度页',card);start.id='browser-scheduler-start';start.onclick=()=>{
+  if(new URLSearchParams(location.hash.slice(1)).has('jm-job')){browserScheduleError='任务执行页不能同时作为调度页，请另开一个普通 Jira 页面。';const p=card.querySelector('#browser-scheduler-status');p.textContent=browserScheduleError;return;}
+  sessionStorage.setItem(SCHEDULER_TAB,'1');GM_setValue(BROWSER_SCHEDULE,true);hub.startBrowserScheduler();
+ };
+ const stop=el('button','停止浏览器调度',card);stop.id='browser-scheduler-stop';stop.onclick=()=>{GM_setValue(BROWSER_SCHEDULE,false);sessionStorage.removeItem(SCHEDULER_TAB);if(browserScheduleTimer!==null)clearInterval(browserScheduleTimer);browserScheduleTimer=null;document.title=initialPageTitle;browserScheduleStatus();};
+ el('small','每 30 秒检查一次；多个调度页自动防重复。关闭或冻结全部调度页将停止检查，恢复时仅补触发最近 10 分钟内的时间点。已开始的任务不会因停止调度而中止。请停用旧 Mac 定时项。',card);
+ browserScheduleStatus();
+};
+addEventListener('pagehide',()=>{if(browserScheduleTimer!==null)clearInterval(browserScheduleTimer);browserScheduleTimer=null;});
+addEventListener('pageshow',()=>hub.startBrowserScheduler());
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void browserSchedulerTick();});
 function initTimeout(detailOnly){
   'use strict';
   // ================= 只需修改这里的规则配置 =================
@@ -290,11 +356,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.9.4 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.10.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.9.4 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.10.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -1267,7 +1333,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.9.4 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.10.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -2287,5 +2353,5 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
   };
 })();
 
-hub.startScheduled();
+hub.startScheduled();hub.startBrowserScheduler();
 })();

@@ -1,6 +1,6 @@
 {
   "name": "jira-monitor",
-  "version": "6.9.4",
+  "version": "6.10.0",
   "private": true,
   "scripts": {
     "build": "python3 scripts/build.py",

@@ -28,12 +28,12 @@ hub.deliveryPayload=payload=>{
 hub.jobProjectAllowed=key=>!hub.jobDelivery?.projects||hub.jobDelivery.projects.split('/').includes(key);
 async function executeJob(id,manual=false){
  const job=validJob(jobList().find(j=>j.id===id)||{});if(!job.enabled)throw Error('此 Job 尚未启用，请在配置中心勾选启用并保存。');
- const target=new URL(job.url),here=new URL(location.href);here.hash='';if(here.href!==target.href)throw Error('当前页面与 Job 查询不一致，请从 Job 的“立即运行”或 Mac 启动器打开。');
+ const target=new URL(job.url),here=new URL(location.href);here.hash='';if(here.href!==target.href)throw Error('当前页面与 Job 查询不一致，请从调度页或 Job 的“立即运行”打开。');
  const slot=manual?'手动 '+new Date().toISOString():jobSlot(job);if(!slot)throw Error('未到此 Job 的执行时间，或已超过 10 分钟启动窗口。');
  const execute=async()=>{
   const current=jobList().find(x=>x.id===id);if(!current?.enabled)return;
   if(JSON.stringify(validJob(current))!==JSON.stringify(job))throw Error('等待期间 Job 配置已变化，请重新打开。');
-  const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot)return;
+  const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
   jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;
   try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);}
@@ -60,7 +60,8 @@ function macInstaller(jobs,browser){
 }
 hub.macInstaller=macInstaller;
 hub.renderJobs=()=>{
- const panel=el('section',null,hub.settings);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','Mac 按本机时区打开查询页面，依次执行所选菜单。修改时间、页面或启用状态后，请重新导出并安装启动器。电脑需保持唤醒，Chrome 中已安装脚本且 Jira 登录有效。',panel);
+ const panel=el('section',null,hub.settings);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','在此配置 Job、时间和通知，保存后由固定 Jira 标签页调度。修改配置后自动生效，不需要导出安装器。',panel);
+ hub.renderBrowserScheduler(panel);
  const entries=[],list=el('div',null,panel),status=el('p',null,panel);status.setAttribute('role','status');
  const addJob=value=>{
   const card=el('fieldset',null,list);card.style.cssText='border:1px solid #dbe3f0;border-radius:10px;margin:12px 0;padding:14px;display:grid;gap:8px';
@@ -71,16 +72,17 @@ hub.renderJobs=()=>{
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
   el('small','分析当前查询全部分页；Sprint / Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
-  const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
+  const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
  };
  const stored=jobList();(stored.length?stored:[{}]).forEach(addJob);
  el('button','新增 Job',panel).onclick=()=>addJob({});
- el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);status.textContent='Job 已保存。首次使用或修改时间后，请导出并安装 Mac 启动器。';}catch(e){status.textContent=e.message;}};
- const browser=el('select',null,panel);for(const name of ['Google Chrome','Microsoft Edge']){const o=el('option',name,browser);o.value=name;}
- const exportMac=el('button','导出 Mac 定时启动器',panel);exportMac.onclick=async()=>{exportMac.disabled=true;status.textContent='正在下载并校验 Mac 安装器…';try{const installer=macInstaller(jobList(),browser.value);hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:await macAppArchive(installer)});status.textContent='已导出。双击 ZIP 解压，保持 .app 与 Jira-Monitor-Schedule.sh 在同一文件夹，再双击 .app 点击“安装”。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}finally{exportMac.disabled=false;}};
- el('p','停用全部 Mac 启动任务：先在配置中心取消启用并保存（脚本立即停止执行）。删除系统任务的方法见仓库 JOBS.md。页面重复打开时同一时间点只执行一次；失败不自动重试，可查看 Job 日志后手动运行。',panel);
+ el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);status.textContent='Job 已保存，固定标签页在下一次检查时读取新配置。请点击“设此标签页为调度页”，并保留该标签。';}catch(e){status.textContent=e.message;}};
+ const advanced=el('details',null,panel);el('summary','高级：旧 Mac 系统调度（固定标签方式不需要）',advanced);
+ const browser=el('select',null,advanced);for(const name of ['Google Chrome','Microsoft Edge']){const o=el('option',name,browser);o.value=name;}
+ const exportMac=el('button','导出 Mac 定时启动器',advanced);exportMac.onclick=async()=>{exportMac.disabled=true;status.textContent='正在下载并校验 Mac 安装器…';try{const installer=macInstaller(jobList(),browser.value);hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:await macAppArchive(installer)});status.textContent='已导出。双击 ZIP 解压，保持 .app 与 Jira-Monitor-Schedule.sh 在同一文件夹，再双击 .app 点击“安装”。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}finally{exportMac.disabled=false;}};
+ el('p','停用全部 Mac 启动任务：先在配置中心取消启用并保存（脚本立即停止执行）。删除系统任务的方法见仓库 JOBS.md。页面重复打开时同一时间点只执行一次；失败不自动重试，可查看 Job 日志后手动运行。',advanced);
 };
 hub.startScheduled=()=>{
  const params=new URLSearchParams(location.hash.slice(1)),id=params.get('jm-job');if(!id)return;

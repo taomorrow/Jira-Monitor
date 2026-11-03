@@ -1,4 +1,4 @@
-# Jira Monitor v6.9.4
+# Jira Monitor v6.10.0
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -156,3 +156,9 @@ Mac 应用二进制不再内嵌在用户脚本里，仅点击“导出 Mac 定�
 ## v6.9.4：COE 排除 Bug、核对子任务类型
 
 COE 批量收集时排除 Bug，逐条 REST 读取时再次核对，详情中的 Bug 也跳过，不进入结果、Excel、报告或通知。DEV 读取 Story 下属条目时只接受 Sub-task / Subtask（或 Jira 明确标记 subtask=true 的非 Bug 类型）；Bug 及其他普通类型不参与负责人收集。条目缺少类型时按编号补取类型和负责人，无法确认类型时暂停而非猜测。直接扫描 Sub-task 时使用该 Sub-task 自身负责人；Story 的 DEV 仍从已确认子任务收集并去重，DCT 保持原负责人规则。升级前旧结果请停止后重新扫描。
+
+## v6.10.0：固定 Jira 标签页调度
+
+在“配置中心 → 定时 Job”保存配置后，点击“设此标签页为调度页”，再右键浏览器标签选择“固定”。无需 Mac 安装器。每 30 秒只检查本地时钟及配置，到点新建后台任务标签执行；多个调度页防重复、多个 Job 分析串行。更改时间或通知后保存即生效。停止调度不取消正在执行的任务。
+
+需保持 Jira 调度页打开、电脑唤醒、登录及网络有效。后台冻结或睡眠可能导致延迟，恢复时仅补触发最近 10 分钟内的时间点。关闭后需重新设定调度页。原 Mac 模式移至折叠高级区；迁移时应停用旧系统定时项。具体步骤见 [JOBS.md](JOBS.md)。
