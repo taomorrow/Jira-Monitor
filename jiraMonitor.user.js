@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.10.0
+// @version      6.10.1
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -48,10 +48,10 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.10.0',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.10.1',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
-const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  配置中心',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
+const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
 const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content),epic=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';epic.id='epic-view';epic.hidden=sprint.hidden=settings.hidden=true;
 const grip=el('div',null,shell);grip.id='resize-grip';grip.setAttribute('aria-label','拖动调整窗口大小');
 const detail=el('div');detail.id='detail-popup';detail.hidden=true;const detailHeader=el('div',null,detail);detailHeader.id='detail-header';el('strong','◷  详情分析',detailHeader);el('span','独立浮窗',detailHeader);const detailClose=el('button','❌',detailHeader);detailClose.id='detail-close';detailClose.setAttribute('aria-label','关闭详情分析');const detailContent=el('div',null,detail);detailContent.id='detail-content';
@@ -59,13 +59,13 @@ let geometry=GM_getValue('jira-monitor-window-v1',{}),activeView='timeout',dismi
 function fit(g){const maxW=Math.max(1,innerWidth-24),maxH=Math.max(1,innerHeight-24);const width=Math.max(Math.min(620,maxW),Math.min(Number(g.width)||960,maxW)),height=Math.max(Math.min(360,maxH),Math.min(Number(g.height)||620,maxH));return {width,height,left:Math.max(12,Math.min(Number.isFinite(g.left)?g.left:(innerWidth-width)/2,innerWidth-width-12)),top:Math.max(12,Math.min(Number.isFinite(g.top)?g.top:(innerHeight-height)/2,innerHeight-height-12))};}
 function layout(){geometry=fit(geometry);Object.assign(shell.style,{width:geometry.width+'px',height:geometry.height+'px',left:geometry.left+'px',top:geometry.top+'px'});}layout();
 function drag(node,resizing){node.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;e.preventDefault();const start={...geometry},x=e.clientX,y=e.clientY;node.setPointerCapture?.(e.pointerId);const move=event=>{geometry=resizing?{...start,width:start.width+event.clientX-x,height:start.height+event.clientY-y}:{...start,left:start.left+event.clientX-x,top:start.top+event.clientY-y};layout();};const end=()=>{node.removeEventListener('pointermove',move);node.removeEventListener('pointerup',end);node.removeEventListener('pointercancel',end);GM_setValue('jira-monitor-window-v1',geometry);};node.addEventListener('pointermove',move);node.addEventListener('pointerup',end);node.addEventListener('pointercancel',end);});}drag(header,false);drag(grip,true);addEventListener('resize',layout);
-const hub={timeout,sprint,epic,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
+const hub={closedSprint:value=>/closed/i.test(String(value)),timeout,sprint,epic,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
  show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';epic.hidden=which!=='epic';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[epicTab,'epic'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
  hide(){shell.hidden=true;launcher.focus();},syncRoute(){if(/^\/browse\//i.test(location.pathname)&&activeView==='timeout')shell.hidden=true;},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
  openDetail(){dismissedDetail='';hub.syncDetail();},setAuto(value){hub.autoDetail=value;GM_setValue('jira-monitor-auto-detail',value);if(value){dismissedDetail='';hub.startDetail?.();}else hub.stopDetail?.();hub.syncDetail();},
  refreshSettings(){hub.configure?.();}};
 launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');epicTab.onclick=()=>hub.show('epic');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
-root.addEventListener('keydown',e=>{if(e.key==='Escape')hub.hide();});
+root.addEventListener('keydown',e=>{if(e.key==='Escape'&&!root.querySelector('dialog[open]'))hub.hide();});
 if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
   function validateTeamsUrl(value){
     let u;try{u=new URL(String(value).trim().replace(/\\&/g,'&').replace(/&amp;/g,'&'));}catch{throw new Error('请输入有效的 Teams Workflows HTTPS Webhook 地址。');}
@@ -233,7 +233,12 @@ function macInstaller(jobs,browser){
 }
 hub.macInstaller=macInstaller;
 hub.renderJobs=()=>{
- const panel=el('section',null,hub.settings);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','在此配置 Job、时间和通知，保存后由固定 Jira 标签页调度。修改配置后自动生效，不需要导出安装器。',panel);
+ hub.settings.querySelector('#job-settings-dialog')?.remove();
+ const open=el('button','定时 Job 设置',hub.settings);open.id='open-job-settings';
+ const dialog=el('dialog',null,hub.settings);dialog.id='job-settings-dialog';dialog.style.cssText='width:min(860px,92vw);max-height:86vh;overflow:auto;border:1px solid #dbe3f0;border-radius:16px;padding:22px;color:#172b4d;box-shadow:0 20px 80px #091e4240';
+ const close=el('button','❌',dialog);close.id='job-settings-close';close.setAttribute('aria-label','关闭 Job 设置');close.style.cssText='position:sticky;top:0;float:right;color:red;background:#fff1f2;z-index:1';close.onclick=()=>dialog.close();
+ open.onclick=()=>dialog.showModal();
+ const panel=el('section',null,dialog);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','在此配置 Job、时间和通知，保存后由固定 Jira 标签页调度。修改配置后自动生效，不需要导出安装器。',panel);
  hub.renderBrowserScheduler(panel);
  const entries=[],list=el('div',null,panel),status=el('p',null,panel);status.setAttribute('role','status');
  const addJob=value=>{
@@ -244,7 +249,7 @@ hub.renderJobs=()=>{
   const select=(key,title,options)=>{const label=el('label',title+' ',card),input=el('select',null,label);for(const [v,name] of options){const o=el('option',name,input);o.value=v;}input.value=j[key];controls[key]=input;};
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
-  el('small','分析当前查询全部分页；Sprint / Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
+  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
   const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
@@ -356,11 +361,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.10.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.10.1 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.10.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.10.1 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -417,7 +422,7 @@ function initTimeout(detailOnly){
   function configureCenter(){
     hub.show('settings');hub.settings.replaceChildren();const overlay={remove:()=>hub.show('timeout')},box=hub.settings;
     const add=(tag,text,attr,parent=box)=>{const x=document.createElement(tag);if(text)x.textContent=text;if(attr)x.setAttribute(attr,'');parent.append(x);return x;};
-    add('h2','配置中心');hub.renderJobs();
+    add('h2','Configuration');hub.renderJobs();
     const autoLabel=add('label',null,'data-auto-setting'),auto=add('input',null,'data-auto-detail',autoLabel);auto.type='checkbox';auto.checked=hub.autoDetail;add('span','详情自动分析 · 在 Jira 详情页右下角独立弹出',null,autoLabel);auto.onchange=()=>hub.setAuto(auto.checked);
 
     add('p','项目 Key 取工单编号横杠前的值，如 CSP-3909 → CSP。多个项目可用 / 分隔（如 CSP/OSPIT），共用此行 Webhook、收件人和通知开关。未配置或未启用的项目只统计、不发送；邮件通过该项目 Webhook 对应工作流发送。');
@@ -1333,7 +1338,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.10.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.10.1 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1621,15 +1626,15 @@ initTimeout();initTimeout(true);
   $('status-all').onchange=()=>{for(const x of $('statuses').querySelectorAll('input'))x.checked=$('status-all').checked;invalidate();};
   $('status-select-all').onclick=()=>{$('status-all').checked=true;$('status-all').onchange();};
   $('status-clear').onclick=()=>{$('status-all').checked=false;$('status-all').onchange();};
-  for(const [id,checked] of [['sprint-all',true],['sprint-none',false]])$(id).onclick=()=>{for(const x of $('sprints').querySelectorAll('input'))x.checked=checked;invalidate();};
+  for(const [id,checked] of [['sprint-all',true],['sprint-none',false]])$(id).onclick=()=>{for(const x of $('sprints').querySelectorAll('input'))x.checked=checked&&!hub.closedSprint(x.parentElement.textContent)&&x.value!==NONE;invalidate();};
   async function load(){
     loadedQuery='';$('notify-project').replaceChildren();$('sprints').replaceChildren();
     await detectField();const query=await currentQuery(), issues=await search(query), map=new Map();
     for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:'未分配 Sprint',state:''});for(const s of list)map.set(s.id,s);}
     $('sprints').replaceChildren();
     const options=[...map.values()].sort((a,b)=>(/active/i.test(b.state)?1:0)-(/active/i.test(a.state)?1:0)||b.name.localeCompare(a.name));
-    for(const s of options)choice($('sprints'),s.id,`${s.name}${s.state?' · '+s.state:''} [${s.id}]`,/^active$/i.test(s.state));
-    if(!selected().length&&$('sprints').querySelector('input'))$('sprints').querySelector('input').checked=true;
+    for(const s of options)choice($('sprints'),s.id,`${s.name}${s.state?' · '+s.state:''} [${s.id}]`,!hub.closedSprint(s.name+' '+s.state)&&s.id!==NONE);
+
     $('statuses').replaceChildren();$('status-all').checked=true;
     for(const name of STATUS_NAMES)choice($('statuses'),normalized(name),name,true);
     loadedQuery=query;
@@ -1801,13 +1806,13 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
   }
   hub.jobRunners['sprint']=async job=>{
     if(busy||teamsSending)throw Error('Sprint 正在运行，请先完成当前操作。');
-    let failure;
+    let failure,skipped=false;
     await guard(async()=>{try{
-      $('period').value=job.period;await load();for(const x of $('sprints').querySelectorAll('input'))x.checked=true;
+      $('period').value=job.period;await load();for(const x of $('sprints').querySelectorAll('input'))x.checked=!hub.closedSprint(x.parentElement.textContent)&&x.value!==NONE;
       $('status-all').checked=true;for(const x of $('statuses').querySelectorAll('input'))x.checked=true;
-      $('attach-report').checked=job.attach;await run();
+      if(!selected().length){skipped=true;message('没有有效 Sprint（已排除 CLOSED 和未分配项），本次跳过。');return;}$('attach-report').checked=job.attach;await run();
     }catch(error){failure=error;throw error;}});
-    if(failure)throw failure;
+    if(failure)throw failure;if(skipped)return;
     if(!(job.teams||job.email)||!groups.length)return;
     let count=0;for(const x of $('notify-project').querySelectorAll('input')){x.checked=hub.jobProjectAllowed(x.value)&&!!hub.target(x.value+'-1');if(x.checked)count++;}
     if(!count)throw Error('没有可用的已启用通知项目，请检查配置中心。');

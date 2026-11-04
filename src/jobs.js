@@ -60,7 +60,12 @@ function macInstaller(jobs,browser){
 }
 hub.macInstaller=macInstaller;
 hub.renderJobs=()=>{
- const panel=el('section',null,hub.settings);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','在此配置 Job、时间和通知，保存后由固定 Jira 标签页调度。修改配置后自动生效，不需要导出安装器。',panel);
+ hub.settings.querySelector('#job-settings-dialog')?.remove();
+ const open=el('button','定时 Job 设置',hub.settings);open.id='open-job-settings';
+ const dialog=el('dialog',null,hub.settings);dialog.id='job-settings-dialog';dialog.style.cssText='width:min(860px,92vw);max-height:86vh;overflow:auto;border:1px solid #dbe3f0;border-radius:16px;padding:22px;color:#172b4d;box-shadow:0 20px 80px #091e4240';
+ const close=el('button','❌',dialog);close.id='job-settings-close';close.setAttribute('aria-label','关闭 Job 设置');close.style.cssText='position:sticky;top:0;float:right;color:red;background:#fff1f2;z-index:1';close.onclick=()=>dialog.close();
+ open.onclick=()=>dialog.showModal();
+ const panel=el('section',null,dialog);panel.id='scheduled-jobs';el('h2','定时 Job',panel);el('p','在此配置 Job、时间和通知，保存后由固定 Jira 标签页调度。修改配置后自动生效，不需要导出安装器。',panel);
  hub.renderBrowserScheduler(panel);
  const entries=[],list=el('div',null,panel),status=el('p',null,panel);status.setAttribute('role','status');
  const addJob=value=>{
@@ -71,7 +76,7 @@ hub.renderJobs=()=>{
   const select=(key,title,options)=>{const label=el('label',title+' ',card),input=el('select',null,label);for(const [v,name] of options){const o=el('option',name,input);o.value=v;}input.value=j[key];controls[key]=input;};
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
-  el('small','分析当前查询全部分页；Sprint / Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
+  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
   const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
