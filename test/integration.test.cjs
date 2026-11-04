@@ -438,3 +438,7 @@ test('Job settings are isolated in a dialog opened from Configuration',()=>{
 test('scheduled Sprint skips CLOSED-only results without sending',async()=>{
  const issue=scheduledStory();issue.fields.customfield_1[0].state='closed';const f=boot('/issues/?filter=180929#jm-job=test-job',{setup(w){w.GM_setValue('jira-monitor-jobs-v1',[scheduledJob({menus:['sprint'],teams:true})]);jobMocks(w,[issue]);}});await until(()=>f.store.get('jira-monitor-job-runs-v1')?.['test-job']?.status==='completed');assert.equal(f.requests.length,0);assert.match(f.hub.querySelector('#jsa-host').shadowRoot.getElementById('message').textContent,/没有有效 Sprint/);f.dom.window.close();
 });
+test('scheduled COE survives pageshow during its initial query request',async()=>{
+ let release,entered=false;const f=boot('/issues/?filter=180929#jm-job=test-job',{setup(w){w.GM_setValue('jira-monitor-jobs-v1',[scheduledJob({menus:['coe']})]);jobMocks(w,[scheduledStory()]);const fetch=w.fetch;w.fetch=async(...args)=>{if(String(args[0]).includes('/filter/')){entered=true;await new Promise(r=>release=r);}return fetch(...args);};}});
+ await until(()=>entered);f.w.dispatchEvent(new f.w.Event('pageshow'));release();await until(()=>['completed','failed'].includes(f.store.get('jira-monitor-job-runs-v1')?.['test-job']?.status));assert.equal(f.store.get('jira-monitor-job-runs-v1')['test-job'].status,'completed',JSON.stringify(f.store.get('jira-monitor-job-runs-v1')));assert.equal(f.requests.length,0);f.dom.window.close();
+});
