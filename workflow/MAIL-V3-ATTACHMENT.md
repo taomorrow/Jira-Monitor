@@ -45,3 +45,11 @@ first(triggerBody()?['email']?['attachments'])?['name']
 ```
 
 “附件”内容仍使用上表的 base64ToBinary 表达式。保存后新邮件将使用脚本提供的 Jira-Monitor-项目-时间.html 文件名。已有邮件附件不会改变。
+
+## 无预警扫描摘要不带附件
+
+COE 扫描摘要正文已经包含时间、条目数和扫描完成状态，`email.attachments` 是空数组，不需要报告。若 V3 报 `base64ToBinary` 收到 Null，请把现有邮件动作放入“有附件”为真的分支，并在假分支新增一个不带附件参数的 V3 邮件动作。两边 To、Subject、Body 都使用 `email.to`、`email.subject`、`email.bodyHtml`。
+
+条件左侧（fx）：`greater(length(coalesce(triggerBody()?['email']?['attachments'], json('[]'))), 0)`；中间“等于”；右侧（fx）`true`。
+
+假分支的邮件动作不要填写附件及附件文件名，也不要复制原来的附件转换表达式。此修改在 Power Automate 完成，更新油猴脚本不会自动修改工作流。

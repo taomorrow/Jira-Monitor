@@ -3,12 +3,12 @@ import hashlib
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.10.3').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.10.4').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      api.powerplatform.com','// @connect      api.powerplatform.com\n// @connect      raw.githubusercontent.com')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_openInTab\n// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.10.3')
+t=t[t.index('(function ()'):].replace('5.5.4','6.10.4')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -42,6 +42,7 @@ s=s.replace("    const config=typeof GM_getValue==='function'?GM_getValue('teams
     const projectIssues=reportIssues.filter(i=>i.key.split('-')[0].toUpperCase()===projectKey);
     if(!projectIssues.length){message('所选项目在本次分析中没有任务，请重新选择。',true);return;}
 """)
+s=s.replace('summary,status,created,updated,${field}', 'summary,status,created,updated,assignee,${field}')
 s=s.replace('buildTeamsReport(groups,reportMeta,activePeriod,reportJiraUrl)',"buildTeamsReport(selectStatusGroups(aggregate(projectIssues,field,reportIds,activePeriod.cutoff,reportNow),reportStatuses),reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl)")
 s=s.replace("      const data=JSON.stringify(report.payload),bytes=", """      const bodyText=projectKey+' · '+report.description+'\\n'+reportMeta+'\\n'+reportJiraUrl+'\\n\\n'+report.sections.map(section=>section.name+'\\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\\n')).join('\\n\\n');
       const escape=v=>String(v).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
@@ -83,7 +84,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.10.3',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.10.4',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -233,7 +234,7 @@ epic=epic[:a]+(root/'src/epic-api.js').read_text()+epic[b:]
 epic=epic.replace('<h1>Epic Analysis', '<h1>Epic').replace("g.name+' · '+g.id,card", "g.name,card")
 a=epic.index('<div class="notice">');b=epic.index('</div>',a)
 epic=epic[:a]+'<div class="notice">口径：仅统计当前查询全部分页中的 Story，按当前 Epic 归属分组；不会查询 Epic 下的其他 Story。不包含 Bug、Task、Subtask，不还原历史 Epic 归属。对比两侧均为 0 的状态行及空 Epic 自动隐藏。</div>'+epic[b+6:]
-epic=epic.replace('summary,status,created,updated,${field}', 'summary,status,created,updated,issuetype,parent,${field}')
+epic=epic.replace('summary,status,created,updated,assignee,${field}', 'summary,status,created,updated,assignee,issuetype,parent,${field}')
 
 epic=epic.replace('const query=await currentQuery(), issues=await search(query), map=new Map();', 'const query=await currentQuery(), issues=(await search(query)).filter(isStory), map=new Map();')
 epic=epic.replace('for(const i of issues){const list=sprints(i.fields[field]);', 'await loadEpicNames(issues);\n    for(const i of issues){const list=sprints(i.fields[field]);')

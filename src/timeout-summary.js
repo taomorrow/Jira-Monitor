@@ -27,11 +27,11 @@
     const count=state.projectCounts?.[target.projectKey]??(state.queue||[]).filter(x=>projectKeyOf(x.key)===target.projectKey).length;
     const checked=(state.results||[]).filter(x=>projectKeyOf(x.key)===target.projectKey).length;
     const time=beijingTime(state.finishedAt||Date.now()),status='扫描完成 · 无即将超期或已超期工单';
-    const rows=[['扫描时间',time],['查询条目数',String(count)],['完成 COE 分析',String(checked)],['扫描状态',status],['扫描状态范围',[...new Set((state.rules||CONFIG.rules).flatMap(r=>r.currentStatuses||[]))].join(' / ')]];
+    const rows=[['扫描时间',time],['扫描条目数',String(count)],['扫描状态',status]];
     const title=target.projectKey+' · COE 扫描摘要',text=title+'\n'+rows.map(x=>x.join('：')).join('\n');
     const url=new URL(state.listUrl||location.href);url.hash='';
-    const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+title,bodyText:text,bodyHtml:hub.emailCard({title,subtitle:status,sections:[{title:'扫描结果',headers:['项目','结果'],rows}],meta:'条目数包含当前查询返回的工单；COE 仅分析符合类型及状态范围的工单。',url:url.href})}:{enabled:false};
-    return {type:'message',reportType:'coe-scan-summary',projectKey:target.projectKey,jiraUrl:url.href,text,summary:status,scanTime:time,scanCount:count,analyzedCount:checked,scanStatus:'completed',email,attachments:[{contentType:'application/vnd.microsoft.card.adaptive',contentUrl:null,content:{type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:title,weight:'Bolder',wrap:true},{type:'FactSet',facts:rows.map(([title,value])=>({title,value}))}]}}]};
+    const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+title,bodyText:text,bodyHtml:hub.emailCard({title,subtitle:status,sections:[{title:'扫描结果',headers:['项目','结果'],rows}],meta:'今日已完成扫描，没有符合预警条件的工单。',url:url.href})}:{enabled:false};
+    return {type:'message',reportType:'coe-scan-summary',projectKey:target.projectKey,jiraUrl:url.href,text,summary:status,scanTime:time,scanCount:count,analyzedCount:checked,scanStatus:'completed',items:[],email:{...email,attachments:[]},attachments:[{contentType:'application/vnd.microsoft.card.adaptive',content:{type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:title,weight:'Bolder',wrap:true},{type:'FactSet',facts:rows.map(([title,value])=>({title,value}))}]}}]};
   }
   function alertCooldownKey(item,target){return 'jira-monitor-teams-cooldown-v2:'+target.projectKey+':'+item.key+':'+target.webhook+':'+(target.recipients||[]).map(x=>x.toLowerCase()).sort().join(';');}
   async function sendBatchAlerts(source,automatic=false){

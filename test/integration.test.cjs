@@ -446,11 +446,15 @@ test('COE no-alert summary setting sends zero-query scan metadata through select
  for(const enabled of [false,true]){
  const sent=[],f=boot('/issues/?filter=180929#jm-job=test-job',{setup(w){w.GM_setValue('jira-monitor-coe-empty-summary-v1',enabled);w.GM_setValue('jira-monitor-jobs-v1',[scheduledJob({menus:['coe'],email:true})]);jobMocks(w,[]);w.GM_xmlhttpRequest=r=>{sent.push(r);queueMicrotask(()=>r.onload({status:202}));};}});
  await until(()=>['completed','failed'].includes(f.store.get('jira-monitor-job-runs-v1')?.['test-job']?.status));assert.equal(f.store.get('jira-monitor-job-runs-v1')['test-job'].status,'completed');assert.equal(sent.length,enabled?1:0);
- if(enabled){const p=JSON.parse(sent[0].data);assert.equal(p.reportType,'coe-scan-summary');assert.equal(p.scanCount,0);assert.equal(p.analyzedCount,0);assert.equal(p.scanStatus,'completed');assert.ok(p.scanTime);assert.equal(p.email.enabled,true);assert.deepEqual(p.attachments,[]);assert.match(p.email.bodyText,/无即将超期或已超期/);}
+ if(enabled){const p=JSON.parse(sent[0].data);assert.equal(p.reportType,'coe-scan-summary');assert.equal(p.scanCount,0);assert.equal(p.analyzedCount,0);assert.equal(p.scanStatus,'completed');assert.ok(p.scanTime);assert.deepEqual(p.email.attachments,[]);assert.deepEqual(p.items,[]);assert.match(p.email.bodyText,/扫描条目数/);assert.ok(!JSON.stringify(p).includes(':null'));assert.equal(p.email.enabled,true);assert.deepEqual(p.attachments,[]);assert.match(p.email.bodyText,/无即将超期或已超期/);}
  f.dom.window.close();
  }
 });
 test('COE no-alert option persists and manual empty completed scans can be submitted',async()=>{
  const f=boot(),r=f.hub.querySelector('#jira-duration-panel-host').shadowRoot,check=r.querySelector('[data-empty-summary]');assert.equal(check.checked,false);check.checked=true;check.dispatchEvent(new f.w.Event('change'));assert.equal(f.store.get('jira-monitor-coe-empty-summary-v1'),true);
  jobMocks(f.w,[]);r.querySelector('[data-start]').click();await until(()=>r.querySelector('[data-progress]').textContent.includes('接口扫描完成'));assert.equal(r.querySelector('[data-teams]').disabled,false);r.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const p=JSON.parse(f.requests[0].data);assert.equal(p.reportType,'coe-scan-summary');assert.equal(p.scanCount,0);f.requests[0].onload({status:202});await until(()=>r.querySelector('[data-teams]').disabled===false);f.dom.window.close();
+});
+
+test('Sprint numeric drilldown fetches and displays current assignee in report snapshots',async()=>{
+ const f=boot(),issue=scheduledStory();issue.fields.assignee={displayName:'Alice'};const calls=[];jobMocks(f.w,[issue],calls);const r=f.hub.querySelector('#jsa-host').shadowRoot;r.getElementById('load').click();await until(()=>r.querySelectorAll('#sprints input').length===1);r.getElementById('run').click();await until(()=>r.querySelector('td button'));r.querySelector('td button').click();const d=f.w.document.getElementById('jira-monitor-issue-details').shadowRoot;assert.match(d.textContent,/Assignee/);assert.match(d.querySelector('tbody').textContent,/Alice/);assert.ok(calls.some(x=>String(x).includes('assignee')));f.dom.window.close();
 });

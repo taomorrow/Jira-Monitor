@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.10.3
+// @version      6.10.4
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -48,7 +48,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.10.3',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.10.4',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
@@ -131,8 +131,8 @@ hub.showIssueDetails=(title,items,period)=>{
   const backdrop=add('div',null,root);backdrop.className='backdrop';const panel=add('section',null,backdrop);panel.className='window';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',title);
   const header=add('header',null,panel);add('h2',title,header);const close=add('button','❌',header);close.setAttribute('aria-label','关闭工单明细');const focus=document.activeElement;
   const dismiss=()=>{host.remove();focus?.focus();};close.onclick=dismiss;backdrop.onclick=e=>{if(e.target===backdrop)dismiss();};root.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();dismiss();}});
-  const body=add('main',null,panel),search=add('input',null,body);search.placeholder='搜索 Jira 编号、摘要或状态';search.setAttribute('aria-label','筛选工单明细');const count=add('small',null,body),table=add('table',null,body),head=add('thead',null,table),tr=add('tr',null,head);['Jira','摘要',period.before+' → '+period.after].forEach(x=>add('th',x,tr));const rows=add('tbody',null,table);
-  const render=()=>{rows.replaceChildren();const query=search.value.trim().toLowerCase(),filtered=items.filter(x=>[x.issue.key,x.issue.fields.summary,x.before?.name,x.after?.name].join(' ').toLowerCase().includes(query));count.textContent=filtered.length+' / '+items.length+' 条';for(const x of filtered){const row=add('tr',null,rows),cell=add('td',null,row),a=add('a',x.issue.key,cell);a.href=location.origin+'/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';add('td',x.issue.fields.summary||'',row);add('td',(x.before?.name||'尚未创建')+' → '+(x.after?.name||'尚未创建'),row);}};search.oninput=render;render();close.focus();
+  const body=add('main',null,panel),search=add('input',null,body);search.placeholder='搜索 Jira 编号、摘要、Assignee 或状态';search.setAttribute('aria-label','筛选工单明细');const count=add('small',null,body),table=add('table',null,body),head=add('thead',null,table),tr=add('tr',null,head);['Jira','摘要','Assignee',period.before+' → '+period.after].forEach(x=>add('th',x,tr));const rows=add('tbody',null,table);
+  const render=()=>{rows.replaceChildren();const query=search.value.trim().toLowerCase(),filtered=items.filter(x=>[x.issue.key,x.issue.fields.summary,x.issue.fields.assignee?.displayName,x.before?.name,x.after?.name].join(' ').toLowerCase().includes(query));count.textContent=filtered.length+' / '+items.length+' 条';for(const x of filtered){const row=add('tr',null,rows),cell=add('td',null,row),a=add('a',x.issue.key,cell);a.href=location.origin+'/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';add('td',x.issue.fields.summary||'',row);add('td',x.issue.fields.assignee?.displayName||'未分配',row);add('td',(x.before?.name||'尚未创建')+' → '+(x.after?.name||'尚未创建'),row);}};search.oninput=render;render();close.focus();
 };
 // Load the native installer only after the user chooses Export; never during Jira startup.
 let macTemplatePromise;
@@ -361,11 +361,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.10.3 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.10.4 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.10.3 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.10.4 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -905,11 +905,11 @@ function initTimeout(detailOnly){
     const count=state.projectCounts?.[target.projectKey]??(state.queue||[]).filter(x=>projectKeyOf(x.key)===target.projectKey).length;
     const checked=(state.results||[]).filter(x=>projectKeyOf(x.key)===target.projectKey).length;
     const time=beijingTime(state.finishedAt||Date.now()),status='扫描完成 · 无即将超期或已超期工单';
-    const rows=[['扫描时间',time],['查询条目数',String(count)],['完成 COE 分析',String(checked)],['扫描状态',status],['扫描状态范围',[...new Set((state.rules||CONFIG.rules).flatMap(r=>r.currentStatuses||[]))].join(' / ')]];
+    const rows=[['扫描时间',time],['扫描条目数',String(count)],['扫描状态',status]];
     const title=target.projectKey+' · COE 扫描摘要',text=title+'\n'+rows.map(x=>x.join('：')).join('\n');
     const url=new URL(state.listUrl||location.href);url.hash='';
-    const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+title,bodyText:text,bodyHtml:hub.emailCard({title,subtitle:status,sections:[{title:'扫描结果',headers:['项目','结果'],rows}],meta:'条目数包含当前查询返回的工单；COE 仅分析符合类型及状态范围的工单。',url:url.href})}:{enabled:false};
-    return {type:'message',reportType:'coe-scan-summary',projectKey:target.projectKey,jiraUrl:url.href,text,summary:status,scanTime:time,scanCount:count,analyzedCount:checked,scanStatus:'completed',email,attachments:[{contentType:'application/vnd.microsoft.card.adaptive',contentUrl:null,content:{type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:title,weight:'Bolder',wrap:true},{type:'FactSet',facts:rows.map(([title,value])=>({title,value}))}]}}]};
+    const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+title,bodyText:text,bodyHtml:hub.emailCard({title,subtitle:status,sections:[{title:'扫描结果',headers:['项目','结果'],rows}],meta:'今日已完成扫描，没有符合预警条件的工单。',url:url.href})}:{enabled:false};
+    return {type:'message',reportType:'coe-scan-summary',projectKey:target.projectKey,jiraUrl:url.href,text,summary:status,scanTime:time,scanCount:count,analyzedCount:checked,scanStatus:'completed',items:[],email:{...email,attachments:[]},attachments:[{contentType:'application/vnd.microsoft.card.adaptive',content:{type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:title,weight:'Bolder',wrap:true},{type:'FactSet',facts:rows.map(([title,value])=>({title,value}))}]}}]};
   }
   function alertCooldownKey(item,target){return 'jira-monitor-teams-cooldown-v2:'+target.projectKey+':'+item.key+':'+target.webhook+':'+(target.recipients||[]).map(x=>x.toLowerCase()).sort().join(';');}
   async function sendBatchAlerts(source,automatic=false){
@@ -1355,7 +1355,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.10.3 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.10.4 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1579,7 +1579,7 @@ initTimeout();initTimeout(true);
   async function search(jql){
     let start=0,total,all=[]; const seen=new Set();
     do {
-      const params=new URLSearchParams({jql,fields:`summary,status,created,updated,${field}`,startAt:String(start),maxResults:'100'});
+      const params=new URLSearchParams({jql,fields:`summary,status,created,updated,assignee,${field}`,startAt:String(start),maxResults:'100'});
       const page=await api('/rest/api/2/search?'+params);
       if(!Array.isArray(page.issues)||!Number.isFinite(page.total))throw new Error('搜索接口响应格式不支持');
       if(total!==undefined&&total!==page.total)throw new Error('查询过程中任务数量发生变化，请重试以免分页遗漏。');
@@ -1591,7 +1591,7 @@ initTimeout();initTimeout(true);
     return all;
   }
   async function history(issue){
-    const params=new URLSearchParams({fields:`summary,status,created,updated,${field}`,expand:'changelog'});
+    const params=new URLSearchParams({fields:`summary,status,created,updated,assignee,${field}`,expand:'changelog'});
     const full=await api('/rest/api/2/issue/'+encodeURIComponent(issue.key)+'?'+params);
     // The issue detail is authoritative. Search-index timestamps can differ or lag.
     // Never infer an actual user edit from a raw updated-string mismatch.
@@ -1693,7 +1693,7 @@ function buildInteractiveReport(model){
   const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · Sprint 报告</title><style>
 *{box-sizing:border-box}body{margin:0;background:#f3f6fc;color:#24334d;font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif}header{background:white;border-bottom:1px solid #e0e7f1;padding:20px max(24px,calc((100vw - 1120px)/2))}h1{font-size:24px;margin:0}h2{font-size:18px;margin:0 0 10px}small,.muted{color:#7b899e;font-size:12px}main{max-width:1168px;padding:24px;margin:auto}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:16px 0}.card{background:white;border:1px solid #e0e7f1;border-radius:12px;padding:20px;margin:16px 0;overflow-x:auto}button,select,input,a.action{font:inherit;border:1px solid #d9e2f1;border-radius:7px;padding:7px 12px;background:white;color:#245de8;cursor:pointer}input{color:#24334d;min-width:230px}.action{text-decoration:none}table{width:100%;border-collapse:collapse}th,td{padding:11px 12px;border-bottom:1px solid #edf1f7;text-align:left;vertical-align:top}th{background:#f3f6fc;color:#738198;font-size:12px}td.number,th.number{text-align:center}td.number button{border:0;padding:0;background:none;text-decoration:underline;font-variant-numeric:tabular-nums}tr.total{background:#edf3ff;font-weight:700}.positive{color:#d13438}.changed{background:#fff9eb}a{color:#245de8}#detail{position:fixed;z-index:10;inset:8vh max(16px,calc((100vw - 1050px)/2));margin:0;box-shadow:0 0 0 100vmax #14284666,0 20px 80px #14284655;overflow:auto;resize:both}#detail[hidden]{display:none}#detail-close{float:right;color:#d13438;background:#fff1f2;border:0}.tag{display:inline-block;background:#eaf0ff;color:#245de8;font-size:11px;padding:3px 8px;border-radius:5px;margin-left:8px}#meta{white-space:pre-wrap;overflow-wrap:anywhere}#empty{color:#7b899e}@media(max-width:640px){main{padding:12px}.card{padding:12px}th,td{padding:8px}h1{font-size:20px}}@media print{body{background:white}.toolbar,button{display:none}.card{break-inside:avoid}}
-</style></head><body><header><h1>Jira Monitor <span class="tag">Sprint Analysis</span></h1><small>独立交互报告 · 分析快照</small></header><main><p id="period"></p><div class="toolbar"><label>项目 <select id="project"></select></label><button id="all-changes">查看全部变化</button><a id="jira-query" class="action" target="_blank" rel="noopener noreferrer">打开 Jira 查询</a></div><p class="muted">点击昨日 / 今日数字，在独立弹窗查看对应工单及状态前后变化；报告保持生成时的数据，不会自动更新。</p><div id="groups"></div><section id="detail" class="card" role="dialog" aria-modal="true" aria-label="工单明细" hidden><button id="detail-close" aria-label="关闭工单明细">❌</button><h2 id="detail-title"></h2><div class="toolbar"><input id="search" placeholder="筛选 Jira 编号或摘要" aria-label="筛选明细"><span id="detail-count" class="muted"></span></div><table><thead><tr><th>Issue</th><th>摘要</th><th id="before-heading"></th><th id="after-heading"></th><th>变化</th></tr></thead><tbody id="detail-rows"></tbody></table><p id="empty" hidden>没有对应任务。</p></section><details class="card"><summary>统计口径与查询条件</summary><p id="meta" class="muted"></p></details></main><script id="report-data" type="application/json">${data}</script><script>
+</style></head><body><header><h1>Jira Monitor <span class="tag">Sprint Analysis</span></h1><small>独立交互报告 · 分析快照</small></header><main><p id="period"></p><div class="toolbar"><label>项目 <select id="project"></select></label><button id="all-changes">查看全部变化</button><a id="jira-query" class="action" target="_blank" rel="noopener noreferrer">打开 Jira 查询</a></div><p class="muted">点击昨日 / 今日数字，在独立弹窗查看对应工单及状态前后变化；报告保持生成时的数据，不会自动更新。</p><div id="groups"></div><section id="detail" class="card" role="dialog" aria-modal="true" aria-label="工单明细" hidden><button id="detail-close" aria-label="关闭工单明细">❌</button><h2 id="detail-title"></h2><div class="toolbar"><input id="search" placeholder="筛选 Jira 编号、摘要或 Assignee" aria-label="筛选明细"><span id="detail-count" class="muted"></span></div><table><thead><tr><th>Issue</th><th>摘要</th><th>Assignee</th><th id="before-heading"></th><th id="after-heading"></th><th>变化</th></tr></thead><tbody id="detail-rows"></tbody></table><p id="empty" hidden>没有对应任务。</p></section><details class="card"><summary>统计口径与查询条件</summary><p id="meta" class="muted"></p></details></main><script id="report-data" type="application/json">${data}</script><script>
 (${reportRuntime.toString()})();
 </script></body></html>`;
 }
@@ -1708,8 +1708,8 @@ function reportRuntime(){
  const keys=[...new Set(model.groups.flatMap(g=>g.issues.map(i=>projectOf(i.key))))].sort();el('option','全部项目',$('project')).value='';for(const key of keys)el('option',key,$('project')).value=key;
  function filtered(issues){return issues.filter(i=>!$('project').value||projectOf(i.key)===$('project').value);}
  function renderDetails(){
-   const term=$('search').value.trim().toLowerCase(),items=selection.filter(i=>(i.key+' '+i.summary).toLowerCase().includes(term));$('detail-rows').replaceChildren();$('detail-title').textContent=detailTitle;$('detail-count').textContent=items.length+' / '+selection.length+' 条';$('empty').hidden=items.length>0;
-   for(const item of items){const tr=el('tr',null,$('detail-rows'));if(item.before!==item.after)tr.className='changed';const td=el('td',null,tr),link=el('a',item.key,td);if(jira){link.href=new URL('/browse/'+encodeURIComponent(item.key),jira).href;link.target='_blank';link.rel='noopener noreferrer';}el('td',item.summary,tr);el('td',item.before||'尚未创建',tr);el('td',item.after||'尚未创建',tr);el('td',!item.before?'新建':item.before!==item.after?'状态变化':'未变化',tr);}
+   const term=$('search').value.trim().toLowerCase(),items=selection.filter(i=>(i.key+' '+i.summary+' '+(i.assignee||'未分配')).toLowerCase().includes(term));$('detail-rows').replaceChildren();$('detail-title').textContent=detailTitle;$('detail-count').textContent=items.length+' / '+selection.length+' 条';$('empty').hidden=items.length>0;
+   for(const item of items){const tr=el('tr',null,$('detail-rows'));if(item.before!==item.after)tr.className='changed';const td=el('td',null,tr),link=el('a',item.key,td);if(jira){link.href=new URL('/browse/'+encodeURIComponent(item.key),jira).href;link.target='_blank';link.rel='noopener noreferrer';}el('td',item.summary,tr);el('td',item.assignee||'未分配',tr);el('td',item.before||'尚未创建',tr);el('td',item.after||'尚未创建',tr);el('td',!item.before?'新建':item.before!==item.after?'状态变化':'未变化',tr);}
  }
  function show(title,items){selection=items;detailTitle=title;$('search').value='';$('detail').hidden=false;renderDetails();$('detail-close').focus();}
  function render(){
@@ -1725,7 +1725,7 @@ function reportRuntime(){
 if(typeof module==='object'&&module.exports)module.exports={buildInteractiveReport};
 
   function reportModel(source=groups){
-    return {version:1,analysisType:'sprint-analysis',meta:reportMeta,jiraUrl:reportJiraUrl,period:activePeriod,generatedAt:new Date(reportNow).toISOString(),groups:source.map(group=>{const rows=rowsWithTotal(group);return {id:group.id,name:group.name,issues:group.issues.map(x=>({key:x.issue.key,summary:x.issue.fields.summary||'',before:x.before?.name||'',after:x.after?.name||'',changed:x.changed})),rows:rows.map((row,i)=>({name:row.name,total:i===rows.length-1,before:row.before.map(x=>x.key),after:row.after.map(x=>x.key)}))};})};
+    return {version:1,analysisType:'sprint-analysis',meta:reportMeta,jiraUrl:reportJiraUrl,period:activePeriod,generatedAt:new Date(reportNow).toISOString(),groups:source.map(group=>{const rows=rowsWithTotal(group);return {id:group.id,name:group.name,issues:group.issues.map(x=>({key:x.issue.key,summary:x.issue.fields.summary||'',assignee:x.issue.fields.assignee?.displayName||'未分配',before:x.before?.name||'',after:x.after?.name||'',changed:x.changed})),rows:rows.map((row,i)=>({name:row.name,total:i===rows.length-1,before:row.before.map(x=>x.key),after:row.after.map(x=>x.key)}))};})};
   }
   function reportFile(source=groups,project='all'){
     return {name:'Jira-Monitor-'+project+'-'+new Date(reportNow).toISOString().replace(/[:.]/g,'-')+'.html',html:buildInteractiveReport(reportModel(source))};
@@ -2096,7 +2096,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
   async function search(jql){
     let start=0,total,all=[]; const seen=new Set();
     do {
-      const params=new URLSearchParams({jql,fields:`summary,status,created,updated,issuetype,parent,${field}`,startAt:String(start),maxResults:'100'});
+      const params=new URLSearchParams({jql,fields:`summary,status,created,updated,assignee,issuetype,parent,${field}`,startAt:String(start),maxResults:'100'});
       const page=await api('/rest/api/2/search?'+params);
       if(!Array.isArray(page.issues)||!Number.isFinite(page.total))throw new Error('搜索接口响应格式不支持');
       if(total!==undefined&&total!==page.total)throw new Error('查询过程中任务数量发生变化，请重试以免分页遗漏。');
@@ -2108,7 +2108,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     return all;
   }
   async function history(issue){
-    const params=new URLSearchParams({fields:`summary,status,created,updated,issuetype,parent,${field}`,expand:'changelog'});
+    const params=new URLSearchParams({fields:`summary,status,created,updated,assignee,issuetype,parent,${field}`,expand:'changelog'});
     const full=await api('/rest/api/2/issue/'+encodeURIComponent(issue.key)+'?'+params);
     // The issue detail is authoritative. Search-index timestamps can differ or lag.
     // Never infer an actual user edit from a raw updated-string mismatch.
@@ -2211,7 +2211,7 @@ function buildInteractiveReport(model){
   const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · Epic 报告</title><style>
 *{box-sizing:border-box}body{margin:0;background:#f3f6fc;color:#24334d;font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif}header{background:white;border-bottom:1px solid #e0e7f1;padding:20px max(24px,calc((100vw - 1120px)/2))}h1{font-size:24px;margin:0}h2{font-size:18px;margin:0 0 10px}small,.muted{color:#7b899e;font-size:12px}main{max-width:1168px;padding:24px;margin:auto}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:16px 0}.card{background:white;border:1px solid #e0e7f1;border-radius:12px;padding:20px;margin:16px 0;overflow-x:auto}button,select,input,a.action{font:inherit;border:1px solid #d9e2f1;border-radius:7px;padding:7px 12px;background:white;color:#245de8;cursor:pointer}input{color:#24334d;min-width:230px}.action{text-decoration:none}table{width:100%;border-collapse:collapse}th,td{padding:11px 12px;border-bottom:1px solid #edf1f7;text-align:left;vertical-align:top}th{background:#f3f6fc;color:#738198;font-size:12px}td.number,th.number{text-align:center}td.number button{border:0;padding:0;background:none;text-decoration:underline;font-variant-numeric:tabular-nums}tr.total{background:#edf3ff;font-weight:700}.positive{color:#d13438}.changed{background:#fff9eb}a{color:#245de8}#detail{position:fixed;z-index:10;inset:8vh max(16px,calc((100vw - 1050px)/2));margin:0;box-shadow:0 0 0 100vmax #14284666,0 20px 80px #14284655;overflow:auto;resize:both}#detail[hidden]{display:none}#detail-close{float:right;color:#d13438;background:#fff1f2;border:0}.tag{display:inline-block;background:#eaf0ff;color:#245de8;font-size:11px;padding:3px 8px;border-radius:5px;margin-left:8px}#meta{white-space:pre-wrap;overflow-wrap:anywhere}#empty{color:#7b899e}@media(max-width:640px){main{padding:12px}.card{padding:12px}th,td{padding:8px}h1{font-size:20px}}@media print{body{background:white}.toolbar,button{display:none}.card{break-inside:avoid}}
-</style></head><body><header><h1>Jira Monitor <span class="tag">Epic Analysis</span></h1><small>独立交互报告 · 分析快照</small></header><main><p id="period"></p><div class="toolbar"><label>项目 <select id="project"></select></label><button id="all-changes">查看全部变化</button><a id="jira-query" class="action" target="_blank" rel="noopener noreferrer">打开 Jira 查询</a></div><p class="muted">点击昨日 / 今日数字，在独立弹窗查看对应工单及状态前后变化；报告保持生成时的数据，不会自动更新。</p><div id="groups"></div><section id="detail" class="card" role="dialog" aria-modal="true" aria-label="工单明细" hidden><button id="detail-close" aria-label="关闭工单明细">❌</button><h2 id="detail-title"></h2><div class="toolbar"><input id="search" placeholder="筛选 Jira 编号或摘要" aria-label="筛选明细"><span id="detail-count" class="muted"></span></div><table><thead><tr><th>Issue</th><th>摘要</th><th id="before-heading"></th><th id="after-heading"></th><th>变化</th></tr></thead><tbody id="detail-rows"></tbody></table><p id="empty" hidden>没有对应任务。</p></section><details class="card"><summary>统计口径与查询条件</summary><p id="meta" class="muted"></p></details></main><script id="report-data" type="application/json">${data}</script><script>
+</style></head><body><header><h1>Jira Monitor <span class="tag">Epic Analysis</span></h1><small>独立交互报告 · 分析快照</small></header><main><p id="period"></p><div class="toolbar"><label>项目 <select id="project"></select></label><button id="all-changes">查看全部变化</button><a id="jira-query" class="action" target="_blank" rel="noopener noreferrer">打开 Jira 查询</a></div><p class="muted">点击昨日 / 今日数字，在独立弹窗查看对应工单及状态前后变化；报告保持生成时的数据，不会自动更新。</p><div id="groups"></div><section id="detail" class="card" role="dialog" aria-modal="true" aria-label="工单明细" hidden><button id="detail-close" aria-label="关闭工单明细">❌</button><h2 id="detail-title"></h2><div class="toolbar"><input id="search" placeholder="筛选 Jira 编号、摘要或 Assignee" aria-label="筛选明细"><span id="detail-count" class="muted"></span></div><table><thead><tr><th>Issue</th><th>摘要</th><th>Assignee</th><th id="before-heading"></th><th id="after-heading"></th><th>变化</th></tr></thead><tbody id="detail-rows"></tbody></table><p id="empty" hidden>没有对应任务。</p></section><details class="card"><summary>统计口径与查询条件</summary><p id="meta" class="muted"></p></details></main><script id="report-data" type="application/json">${data}</script><script>
 (${reportRuntime.toString()})();
 </script></body></html>`;
 }
@@ -2226,8 +2226,8 @@ function reportRuntime(){
  const keys=[...new Set(model.groups.flatMap(g=>g.issues.map(i=>projectOf(i.key))))].sort();el('option','全部项目',$('project')).value='';for(const key of keys)el('option',key,$('project')).value=key;
  function filtered(issues){return issues.filter(i=>!$('project').value||projectOf(i.key)===$('project').value);}
  function renderDetails(){
-   const term=$('search').value.trim().toLowerCase(),items=selection.filter(i=>(i.key+' '+i.summary).toLowerCase().includes(term));$('detail-rows').replaceChildren();$('detail-title').textContent=detailTitle;$('detail-count').textContent=items.length+' / '+selection.length+' 条';$('empty').hidden=items.length>0;
-   for(const item of items){const tr=el('tr',null,$('detail-rows'));if(item.before!==item.after)tr.className='changed';const td=el('td',null,tr),link=el('a',item.key,td);if(jira){link.href=new URL('/browse/'+encodeURIComponent(item.key),jira).href;link.target='_blank';link.rel='noopener noreferrer';}el('td',item.summary,tr);el('td',item.before||'尚未创建',tr);el('td',item.after||'尚未创建',tr);el('td',!item.before?'新建':item.before!==item.after?'状态变化':'未变化',tr);}
+   const term=$('search').value.trim().toLowerCase(),items=selection.filter(i=>(i.key+' '+i.summary+' '+(i.assignee||'未分配')).toLowerCase().includes(term));$('detail-rows').replaceChildren();$('detail-title').textContent=detailTitle;$('detail-count').textContent=items.length+' / '+selection.length+' 条';$('empty').hidden=items.length>0;
+   for(const item of items){const tr=el('tr',null,$('detail-rows'));if(item.before!==item.after)tr.className='changed';const td=el('td',null,tr),link=el('a',item.key,td);if(jira){link.href=new URL('/browse/'+encodeURIComponent(item.key),jira).href;link.target='_blank';link.rel='noopener noreferrer';}el('td',item.summary,tr);el('td',item.assignee||'未分配',tr);el('td',item.before||'尚未创建',tr);el('td',item.after||'尚未创建',tr);el('td',!item.before?'新建':item.before!==item.after?'状态变化':'未变化',tr);}
  }
  function show(title,items){selection=items;detailTitle=title;$('search').value='';$('detail').hidden=false;renderDetails();$('detail-close').focus();}
  function render(){
@@ -2243,7 +2243,7 @@ function reportRuntime(){
 if(typeof module==='object'&&module.exports)module.exports={buildInteractiveReport};
 
   function reportModel(source=groups){
-    return {version:1,analysisType:'epic-analysis',meta:reportMeta,jiraUrl:reportJiraUrl,period:activePeriod,generatedAt:new Date(reportNow).toISOString(),groups:source.map(group=>{const rows=rowsWithTotal(group);return {id:group.id,name:group.name,issues:group.issues.map(x=>({key:x.issue.key,summary:x.issue.fields.summary||'',before:x.before?.name||'',after:x.after?.name||'',changed:x.changed})),rows:rows.map((row,i)=>({name:row.name,total:i===rows.length-1,before:row.before.map(x=>x.key),after:row.after.map(x=>x.key)}))};})};
+    return {version:1,analysisType:'epic-analysis',meta:reportMeta,jiraUrl:reportJiraUrl,period:activePeriod,generatedAt:new Date(reportNow).toISOString(),groups:source.map(group=>{const rows=rowsWithTotal(group);return {id:group.id,name:group.name,issues:group.issues.map(x=>({key:x.issue.key,summary:x.issue.fields.summary||'',assignee:x.issue.fields.assignee?.displayName||'未分配',before:x.before?.name||'',after:x.after?.name||'',changed:x.changed})),rows:rows.map((row,i)=>({name:row.name,total:i===rows.length-1,before:row.before.map(x=>x.key),after:row.after.map(x=>x.key)}))};})};
   }
   function reportFile(source=groups,project='all'){
     return {name:'Jira-Monitor-'+project+'-'+new Date(reportNow).toISOString().replace(/[:.]/g,'-')+'.html',html:buildInteractiveReport(reportModel(source))};
