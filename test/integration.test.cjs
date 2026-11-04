@@ -442,3 +442,15 @@ test('scheduled COE survives pageshow during its initial query request',async()=
  let release,entered=false;const f=boot('/issues/?filter=180929#jm-job=test-job',{setup(w){w.GM_setValue('jira-monitor-jobs-v1',[scheduledJob({menus:['coe']})]);jobMocks(w,[scheduledStory()]);const fetch=w.fetch;w.fetch=async(...args)=>{if(String(args[0]).includes('/filter/')){entered=true;await new Promise(r=>release=r);}return fetch(...args);};}});
  await until(()=>entered);f.w.dispatchEvent(new f.w.Event('pageshow'));release();await until(()=>['completed','failed'].includes(f.store.get('jira-monitor-job-runs-v1')?.['test-job']?.status));assert.equal(f.store.get('jira-monitor-job-runs-v1')['test-job'].status,'completed',JSON.stringify(f.store.get('jira-monitor-job-runs-v1')));assert.equal(f.requests.length,0);f.dom.window.close();
 });
+test('COE no-alert summary setting sends zero-query scan metadata through selected Job channels',async()=>{
+ for(const enabled of [false,true]){
+ const sent=[],f=boot('/issues/?filter=180929#jm-job=test-job',{setup(w){w.GM_setValue('jira-monitor-coe-empty-summary-v1',enabled);w.GM_setValue('jira-monitor-jobs-v1',[scheduledJob({menus:['coe'],email:true})]);jobMocks(w,[]);w.GM_xmlhttpRequest=r=>{sent.push(r);queueMicrotask(()=>r.onload({status:202}));};}});
+ await until(()=>['completed','failed'].includes(f.store.get('jira-monitor-job-runs-v1')?.['test-job']?.status));assert.equal(f.store.get('jira-monitor-job-runs-v1')['test-job'].status,'completed');assert.equal(sent.length,enabled?1:0);
+ if(enabled){const p=JSON.parse(sent[0].data);assert.equal(p.reportType,'coe-scan-summary');assert.equal(p.scanCount,0);assert.equal(p.analyzedCount,0);assert.equal(p.scanStatus,'completed');assert.ok(p.scanTime);assert.equal(p.email.enabled,true);assert.deepEqual(p.attachments,[]);assert.match(p.email.bodyText,/无即将超期或已超期/);}
+ f.dom.window.close();
+ }
+});
+test('COE no-alert option persists and manual empty completed scans can be submitted',async()=>{
+ const f=boot(),r=f.hub.querySelector('#jira-duration-panel-host').shadowRoot,check=r.querySelector('[data-empty-summary]');assert.equal(check.checked,false);check.checked=true;check.dispatchEvent(new f.w.Event('change'));assert.equal(f.store.get('jira-monitor-coe-empty-summary-v1'),true);
+ jobMocks(f.w,[]);r.querySelector('[data-start]').click();await until(()=>r.querySelector('[data-progress]').textContent.includes('接口扫描完成'));assert.equal(r.querySelector('[data-teams]').disabled,false);r.querySelector('[data-teams]').click();await until(()=>f.requests.length===1);const p=JSON.parse(f.requests[0].data);assert.equal(p.reportType,'coe-scan-summary');assert.equal(p.scanCount,0);f.requests[0].onload({status:202});await until(()=>r.querySelector('[data-teams]').disabled===false);f.dom.window.close();
+});

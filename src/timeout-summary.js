@@ -22,26 +22,40 @@
     hub.attachEmailReport(email,hub.coeReportFile(reports,target.projectKey));
     return {type:'message',reportType:'timeout-summary',projectKey:target.projectKey,jiraUrl,summary:subtitle,text,email,scanTime:meta,items:reports.map(({item,report})=>({jiraKey:item.key,summary:item.summary,assignee:report.assignee,devAssignees:item.devAssignees||[],jiraUrl:report.jiraUrl,rules:report.rules})),attachments:[attachment]};
   }
+  const EMPTY_COE='jira-monitor-coe-empty-summary-v1';
+  function scanSummaryPayload(state,target){
+    const count=state.projectCounts?.[target.projectKey]??(state.queue||[]).filter(x=>projectKeyOf(x.key)===target.projectKey).length;
+    const checked=(state.results||[]).filter(x=>projectKeyOf(x.key)===target.projectKey).length;
+    const time=beijingTime(state.finishedAt||Date.now()),status='扫描完成 · 无即将超期或已超期工单';
+    const rows=[['扫描时间',time],['查询条目数',String(count)],['完成 COE 分析',String(checked)],['扫描状态',status],['扫描状态范围',[...new Set((state.rules||CONFIG.rules).flatMap(r=>r.currentStatuses||[]))].join(' / ')]];
+    const title=target.projectKey+' · COE 扫描摘要',text=title+'\n'+rows.map(x=>x.join('：')).join('\n');
+    const url=new URL(state.listUrl||location.href);url.hash='';
+    const email=target.recipients?.length?{enabled:true,recipients:[...target.recipients],to:target.recipients.join(';'),subject:'[Jira Monitor] '+title,bodyText:text,bodyHtml:hub.emailCard({title,subtitle:status,sections:[{title:'扫描结果',headers:['项目','结果'],rows}],meta:'条目数包含当前查询返回的工单；COE 仅分析符合类型及状态范围的工单。',url:url.href})}:{enabled:false};
+    return {type:'message',reportType:'coe-scan-summary',projectKey:target.projectKey,jiraUrl:url.href,text,summary:status,scanTime:time,scanCount:count,analyzedCount:checked,scanStatus:'completed',email,attachments:[{contentType:'application/vnd.microsoft.card.adaptive',contentUrl:null,content:{type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:title,weight:'Bolder',wrap:true},{type:'FactSet',facts:rows.map(([title,value])=>({title,value}))}]}}]};
+  }
   function alertCooldownKey(item,target){return 'jira-monitor-teams-cooldown-v2:'+target.projectKey+':'+item.key+':'+target.webhook+':'+(target.recipients||[]).map(x=>x.toLowerCase()).sort().join(';');}
   async function sendBatchAlerts(source,automatic=false){
     if(teamsSending)return;
     teamsSending=true;render();
     const state=JSON.parse(JSON.stringify(source)),rules=state.rules||CONFIG.rules,groups=new Map(),outcomes=[];
     for(const item of state.results||[]){if(!hasTeamsAlert(item,rules)||!hub.jobProjectAllowed(projectKeyOf(item.key)))continue;const key=projectKeyOf(item.key);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
+    if(state.phase==='done'&&GM_getValue(EMPTY_COE,false)===true){
+      for(const key of Object.keys(state.projectCounts||{}))if(hub.jobProjectAllowed(key)&&!groups.has(key))groups.set(key,[]);
+    }
     try{
       if(!groups.size){notice('没有即将超期或已超期的工单，无需发送。');return;}
       for(const [key,items] of groups){
         const send=async()=>{
-          const configured=projectTarget(items[0].key);if(!configured?.webhook)return key+'：未配置通知目标，跳过';
+          const configured=projectTarget(key+'-1');if(!configured?.webhook)return key+'：未配置通知目标，跳过';
           const target={...configured,recipients:[...(configured.recipients||[])]};
           if(automatic&&!target.autoNotify)return key+'：批量自动通知未开启，跳过';
           const eligible=automatic?items.filter(item=>!(GM_getValue(alertCooldownKey(item,target),null)?.until>Date.now())):items;
-          if(!eligible.length)return key+'：全部工单仍在通知冷却期，跳过';
+          if(items.length&&!eligible.length)return key+'：全部工单仍在通知冷却期，跳过';
           if(hub.jobDelivery?.email&&!target.recipients.length)throw Error('未配置邮件收件人');
-          const payload=hub.deliveryPayload(alertSummaryPayload(eligible,rules,target));
+          const payload=hub.deliveryPayload(items.length?alertSummaryPayload(eligible,rules,target):scanSummaryPayload(state,target));
           if(hub.jobDelivery&&!hub.jobDelivery.attach&&payload.email){delete payload.email.attachments;payload.email.bodyHtml=payload.email.bodyHtml?.replace(/<p data-jira-monitor-report[\s\S]*?<\/p>/g,'');}
           if(automatic){const hours=Number(CONFIG.notificationCooldownHours);if(!Number.isFinite(hours)||hours<=0)throw Error('通知冷却时间无效');for(const item of eligible)GM_setValue(alertCooldownKey(item,target),{until:Date.now()+hours*3600000,state:'submitted'});}
-          await postTeams(payload,target.webhook);return key+'：已提交 1 份预警列表（'+eligible.length+' 条工单）';
+          await postTeams(payload,target.webhook);return key+(items.length?'：已提交 1 份预警列表（'+eligible.length+' 条工单）':'：已提交扫描摘要（无预警工单）');
         };
         try{notice('正在提交 '+key+' 预警列表…');outcomes.push(typeof navigator!=='undefined'&&navigator.locks?.request?await navigator.locks.request('jira-monitor-teams-notify',send):await send());}
         catch(error){outcomes.push(key+'：提交失败或结果未知；'+safeError(error)+'。未自动重试。');showTeamsError(outcomes.join('\n'));}
