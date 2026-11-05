@@ -371,7 +371,7 @@ test('missed Job outside the startup window performs no analysis',async()=>{
 
 
 test('native installer data is absent at startup; export rejects bad checksums and allows retry',async()=>{
- assert.ok(Buffer.byteLength(source)<260000);assert.ok(Math.max(...source.split('\n').map(line=>line.length))<20000);
+ assert.ok(Buffer.byteLength(source)<270000);assert.ok(Math.max(...source.split('\n').map(line=>line.length))<20000);
  const f=boot();let calls=0,downloads=0;f.w.URL.createObjectURL=()=>{downloads++;return 'blob:test';};f.w.HTMLAnchorElement.prototype.click=()=>{};Object.defineProperty(f.w.crypto,'subtle',{value:require('node:crypto').webcrypto.subtle});
  f.w.GM_xmlhttpRequest=request=>{calls++;assert.equal(request.method,'GET');queueMicrotask(()=>request.onload(calls===1?{status:200,responseText:'corrupted'}:{status:200,responseText:fs.readFileSync(__dirname+'/../src/mac-app-template.base64','utf8')}));};
  f.hub.querySelector('#nav-settings').click();assert.equal(calls,0);const input=f.hub.querySelector('[data-job-field="enabled"]');input.checked=true;const buttons=[...f.hub.querySelector('#scheduled-jobs').querySelectorAll('button')];buttons.find(x=>x.textContent==='保存 Job 配置').click();const button=buttons.find(x=>x.textContent==='导出 Mac 定时启动器');button.click();await until(()=>!button.disabled);assert.equal(downloads,0);assert.match(f.hub.querySelector('#scheduled-jobs').textContent,/校验失败/);button.click();await until(()=>!button.disabled);assert.equal(calls,2);assert.equal(downloads,1);assert.equal(f.requests.length,0);f.dom.window.close();
@@ -457,4 +457,17 @@ test('COE no-alert option persists and manual empty completed scans can be submi
 
 test('Sprint numeric drilldown fetches and displays current assignee in report snapshots',async()=>{
  const f=boot(),issue=scheduledStory();issue.fields.assignee={displayName:'Alice'};const calls=[];jobMocks(f.w,[issue],calls);const r=f.hub.querySelector('#jsa-host').shadowRoot;r.getElementById('load').click();await until(()=>r.querySelectorAll('#sprints input').length===1);r.getElementById('run').click();await until(()=>r.querySelector('td button'));r.querySelector('td button').click();const d=f.w.document.getElementById('jira-monitor-issue-details').shadowRoot;assert.match(d.textContent,/Assignee/);assert.match(d.querySelector('tbody').textContent,/Alice/);assert.ok(calls.some(x=>String(x).includes('assignee')));f.dom.window.close();
+});
+
+test('Due loads all filter pages, groups dates and statuses, and every count opens matching assignees',async()=>{
+ const f=boot('/issues/?filter=180929'),calls=[];
+ const items=[['CSP-1','2026-11-05','Open','Alice'],['CSP-2','2026-11-05','Testing','Bob'],['CSP-3','2026-11-04','Open','Carol'],['CSP-4',null,'Open',null]].map(([key,date,status,owner])=>({key,fields:{summary:key,duedate:date,status:{name:status},assignee:owner?{displayName:owner}:null}}));
+ f.w.fetch=async path=>{const u=new URL(path,f.w.location.origin);calls.push(u);if(u.pathname.includes('/filter/'))return response({jql:'project=CSP'});assert.match(u.searchParams.get('fields'),/duedate/);const start=Number(u.searchParams.get('startAt'));return response({total:4,issues:items.slice(start,start+2)});};
+ f.hub.querySelector('#nav-due').click();assert.equal(f.hub.querySelector('#due-view').hidden,false);f.hub.querySelector('#due-load').click();await until(()=>f.hub.querySelectorAll('#due-results .due-card').length===4);
+ const cards=[...f.hub.querySelectorAll('#due-results .due-card')];assert.match(cards[1].textContent,/2026-11-04/);assert.match(cards[3].textContent,/未设置 Due/);const counts=[...cards[2].querySelectorAll('button')];assert.deepEqual(counts.map(x=>x.textContent),['2','1','1']);
+ counts[0].click();let d=f.w.document.getElementById('jira-monitor-issue-details').shadowRoot;assert.equal(d.querySelectorAll('tbody tr').length,2);assert.match(d.textContent,/Alice/);assert.match(d.textContent,/Bob/);assert.doesNotMatch(d.textContent,/尚未创建/);
+ counts[2].click();d=f.w.document.getElementById('jira-monitor-issue-details').shadowRoot;assert.equal(d.querySelectorAll('tbody tr').length,1);assert.match(d.textContent,/CSP-2/);assert.doesNotMatch(d.querySelector('tbody').textContent,/CSP-1/);assert.equal(calls.filter(u=>u.pathname.endsWith('/search')).length,2);assert.equal(f.requests.length,0);f.dom.window.close();
+});
+test('Due rejects incomplete pagination instead of displaying partial totals',async()=>{
+ const f=boot();f.w.fetch=async()=>response({total:2,issues:[]});f.hub.querySelector('#due-load').click();await until(()=>!f.hub.querySelector('#due-load').disabled);assert.match(f.hub.querySelector('#due-message').textContent,/分页提前结束/);assert.equal(f.hub.querySelector('#due-results').children.length,0);f.dom.window.close();
 });
