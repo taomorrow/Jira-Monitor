@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.0
+# Jira Monitor v6.12.1
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -157,7 +157,7 @@ Mac 应用二进制不再内嵌在用户脚本里，仅点击“导出 Mac 定�
 
 COE 批量收集时排除 Bug，逐条 REST 读取时再次核对，详情中的 Bug 也跳过，不进入结果、Excel、报告或通知。DEV 读取 Story 下属条目时只接受 Sub-task / Subtask（或 Jira 明确标记 subtask=true 的非 Bug 类型）；Bug 及其他普通类型不参与负责人收集。条目缺少类型时按编号补取类型和负责人，无法确认类型时暂停而非猜测。直接扫描 Sub-task 时使用该 Sub-task 自身负责人；Story 的 DEV 仍从已确认子任务收集并去重，DCT 保持原负责人规则。升级前旧结果请停止后重新扫描。
 
-## v6.12.0：固定 Jira 标签页调度
+## v6.12.1：固定 Jira 标签页调度
 
 在“配置中心 → 定时 Job”保存配置后，点击“设此标签页为调度页”，再右键浏览器标签选择“固定”。无需 Mac 安装器。每 30 秒只检查本地时钟及配置，到点新建后台任务标签执行；多个调度页防重复、多个 Job 分析串行。更改时间或通知后保存即生效。停止调度不取消正在执行的任务。
 
@@ -167,10 +167,12 @@ COE 可勾选“无预警工单时推送扫描摘要”：扫描完成且项目�
 
 ### Kanban（新增独立菜单）
 
-点击 Kanban → 载入当前查询，读取当前页面查询的全部分页，只统计 Story，包含已完成状态。不会运行原 COE 扫描，不读取状态历史，不推送通知，也不修改 COE / Sprint / Epic 的选择、规则或 Job 配置。
+点击 Kanban → 载入当前查询，读取当前页面查询的全部分页，只统计 Story，包含已完成状态。不会运行原 COE 扫描，不读取状态历史，载入不会自动推送，也不修改 COE / Sprint / Epic 的选择、规则或 Job 配置。
 
 - **COE · 状态分布**：按工作流状态显示带数量的分段色条、图例及横向数量条。点击任意色块、状态或数量，在独立弹窗查看对应 Jira、摘要、Assignee 和当前状态。
 - **Sprint / Epic · 今天**：切换 Sprint 或 Epic，选择一个或多个分组。柱图展示截至载入时的当前数量，Open = Open，Dev = In Progress，Test = Ready For Test + Testing，不计算昨日/上周或增减。
 - Sprint 排除名称或状态带 CLOSED 的分组；Epic 仅按当前查询 Story 的当前关联分组，读取 Epic 标题不会扩大 Story 范围。未分配 Epic 单列。
 - 点击柱、图例数量、分组总数均可查看对应明细。其他状态仍计入分组总数，但不计入 Open / Dev / Test。图例合计按 Jira 编号去重，同一 Story 可出现在多个 Sprint，各 Sprint 数量不可直接相加。
-- 当前状态是接口读取时的快照，刷新数据请重新载入。Kanban 本次不新增 Job 菜单或 Teams / 邮件推送。
+- 当前状态是接口读取时的快照，刷新数据请重新载入。Kanban 不新增 Job 菜单。可在“推送当前 Tab”选择项目、Teams / 邮件及交互附件，预览后确认推送。
+
+Kanban 自动隐藏数量为 0 的状态，以及 Open / Dev / Test 全部为 0 的 Sprint / Epic 分组。发送内容沿用当前 Tab 和所选分组、按项目隔离；Teams 超限时若已选择邮件则仅发邮件。邮件正文是统计卡片，HTML 附件可点击数量查看 Jira、摘要、Assignee 和状态。
