@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.10.4
-// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
+// @version      6.12.0
+// @description  COE、Sprint、Epic 分析及 Kanban 可视化；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
 // @grant        GM_registerMenuCommand
@@ -48,23 +48,23 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.10.4',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.12.0',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
-const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
-const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content),epic=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';epic.id='epic-view';epic.hidden=sprint.hidden=settings.hidden=true;
+const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),kanbanTab=el('button','▦  Kanban',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';kanbanTab.id='nav-kanban';
+const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content),epic=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';epic.id='epic-view';const kanban=el('section',null,content);kanban.id='kanban-view';kanban.hidden=true;epic.hidden=sprint.hidden=settings.hidden=true;
 const grip=el('div',null,shell);grip.id='resize-grip';grip.setAttribute('aria-label','拖动调整窗口大小');
 const detail=el('div');detail.id='detail-popup';detail.hidden=true;const detailHeader=el('div',null,detail);detailHeader.id='detail-header';el('strong','◷  详情分析',detailHeader);el('span','独立浮窗',detailHeader);const detailClose=el('button','❌',detailHeader);detailClose.id='detail-close';detailClose.setAttribute('aria-label','关闭详情分析');const detailContent=el('div',null,detail);detailContent.id='detail-content';
 let geometry=GM_getValue('jira-monitor-window-v1',{}),activeView='timeout',dismissedDetail='';
 function fit(g){const maxW=Math.max(1,innerWidth-24),maxH=Math.max(1,innerHeight-24);const width=Math.max(Math.min(620,maxW),Math.min(Number(g.width)||960,maxW)),height=Math.max(Math.min(360,maxH),Math.min(Number(g.height)||620,maxH));return {width,height,left:Math.max(12,Math.min(Number.isFinite(g.left)?g.left:(innerWidth-width)/2,innerWidth-width-12)),top:Math.max(12,Math.min(Number.isFinite(g.top)?g.top:(innerHeight-height)/2,innerHeight-height-12))};}
 function layout(){geometry=fit(geometry);Object.assign(shell.style,{width:geometry.width+'px',height:geometry.height+'px',left:geometry.left+'px',top:geometry.top+'px'});}layout();
 function drag(node,resizing){node.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;e.preventDefault();const start={...geometry},x=e.clientX,y=e.clientY;node.setPointerCapture?.(e.pointerId);const move=event=>{geometry=resizing?{...start,width:start.width+event.clientX-x,height:start.height+event.clientY-y}:{...start,left:start.left+event.clientX-x,top:start.top+event.clientY-y};layout();};const end=()=>{node.removeEventListener('pointermove',move);node.removeEventListener('pointerup',end);node.removeEventListener('pointercancel',end);GM_setValue('jira-monitor-window-v1',geometry);};node.addEventListener('pointermove',move);node.addEventListener('pointerup',end);node.addEventListener('pointercancel',end);});}drag(header,false);drag(grip,true);addEventListener('resize',layout);
-const hub={closedSprint:value=>/closed/i.test(String(value)),timeout,sprint,epic,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
- show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';epic.hidden=which!=='epic';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[epicTab,'epic'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
+const hub={kanban,closedSprint:value=>/closed/i.test(String(value)),timeout,sprint,epic,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
+ show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';epic.hidden=which!=='epic';kanban.hidden=which!=='kanban';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[epicTab,'epic'],[config,'settings'],[kanbanTab,'kanban']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
  hide(){shell.hidden=true;launcher.focus();},syncRoute(){if(/^\/browse\//i.test(location.pathname)&&activeView==='timeout')shell.hidden=true;},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
  openDetail(){dismissedDetail='';hub.syncDetail();},setAuto(value){hub.autoDetail=value;GM_setValue('jira-monitor-auto-detail',value);if(value){dismissedDetail='';hub.startDetail?.();}else hub.stopDetail?.();hub.syncDetail();},
  refreshSettings(){hub.configure?.();}};
-launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');epicTab.onclick=()=>hub.show('epic');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
+launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');epicTab.onclick=()=>hub.show('epic');kanbanTab.onclick=()=>hub.show('kanban');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
 root.addEventListener('keydown',e=>{if(e.key==='Escape'&&!root.querySelector('dialog[open]'))hub.hide();});
 if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
   function validateTeamsUrl(value){
@@ -131,8 +131,8 @@ hub.showIssueDetails=(title,items,period)=>{
   const backdrop=add('div',null,root);backdrop.className='backdrop';const panel=add('section',null,backdrop);panel.className='window';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',title);
   const header=add('header',null,panel);add('h2',title,header);const close=add('button','❌',header);close.setAttribute('aria-label','关闭工单明细');const focus=document.activeElement;
   const dismiss=()=>{host.remove();focus?.focus();};close.onclick=dismiss;backdrop.onclick=e=>{if(e.target===backdrop)dismiss();};root.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();dismiss();}});
-  const body=add('main',null,panel),search=add('input',null,body);search.placeholder='搜索 Jira 编号、摘要、Assignee 或状态';search.setAttribute('aria-label','筛选工单明细');const count=add('small',null,body),table=add('table',null,body),head=add('thead',null,table),tr=add('tr',null,head);['Jira','摘要','Assignee',period.before+' → '+period.after].forEach(x=>add('th',x,tr));const rows=add('tbody',null,table);
-  const render=()=>{rows.replaceChildren();const query=search.value.trim().toLowerCase(),filtered=items.filter(x=>[x.issue.key,x.issue.fields.summary,x.issue.fields.assignee?.displayName,x.before?.name,x.after?.name].join(' ').toLowerCase().includes(query));count.textContent=filtered.length+' / '+items.length+' 条';for(const x of filtered){const row=add('tr',null,rows),cell=add('td',null,row),a=add('a',x.issue.key,cell);a.href=location.origin+'/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';add('td',x.issue.fields.summary||'',row);add('td',x.issue.fields.assignee?.displayName||'未分配',row);add('td',(x.before?.name||'尚未创建')+' → '+(x.after?.name||'尚未创建'),row);}};search.oninput=render;render();close.focus();
+  const body=add('main',null,panel),search=add('input',null,body);search.placeholder='搜索 Jira 编号、摘要、Assignee 或状态';search.setAttribute('aria-label','筛选工单明细');const count=add('small',null,body),table=add('table',null,body),head=add('thead',null,table),tr=add('tr',null,head);['Jira','摘要','Assignee',period.current?'当前状态':period.before+' → '+period.after].forEach(x=>add('th',x,tr));const rows=add('tbody',null,table);
+  const render=()=>{rows.replaceChildren();const query=search.value.trim().toLowerCase(),filtered=items.filter(x=>[x.issue.key,x.issue.fields.summary,x.issue.fields.assignee?.displayName,x.before?.name,x.after?.name].join(' ').toLowerCase().includes(query));count.textContent=filtered.length+' / '+items.length+' 条';for(const x of filtered){const row=add('tr',null,rows),cell=add('td',null,row),a=add('a',x.issue.key,cell);a.href=location.origin+'/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';add('td',x.issue.fields.summary||'',row);add('td',x.issue.fields.assignee?.displayName||'未分配',row);add('td',period.current?(x.after?.name||'未知状态'):(x.before?.name||'尚未创建')+' → '+(x.after?.name||'尚未创建'),row);}};search.oninput=render;render();close.focus();
 };
 // Load the native installer only after the user chooses Export; never during Jira startup.
 let macTemplatePromise;
@@ -361,11 +361,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.10.4 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.12.0 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.10.4 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.12.0 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -1355,7 +1355,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.10.4 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.12.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -2373,6 +2373,113 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     for(const g of groups){const stats=rowsWithTotal(g);for(const r of stats)rows.push([g.id,g.name,r.name,r.before.length,r.after.length,r.after.length-r.before.length,rate(r.before.length,r.after.length)]);}
     const blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='jira-epic-analysis-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
+})();
+
+// Pure snapshot grouping. No history, external state, or notification side effects.
+function createKanbanCore(statusOrder){
+ const norm=value=>String(value||'').trim().replace(/\s+/g,' ').toLowerCase();
+ const isStory=issue=>/^(story|用户故事|故事)$/.test(norm(issue.fields?.issuetype?.name))&&issue.fields?.issuetype?.subtask!==true;
+ const unique=issues=>[...new Map(issues.map(issue=>[issue.key,issue])).values()];
+ const order=name=>{const i=statusOrder.findIndex(x=>norm(x)===norm(name));return i<0?statusOrder.length:i;};
+ function statuses(issues){const groups=new Map(statusOrder.map(name=>[norm(name),{name,issues:[]}]));for(const issue of unique(issues)){const name=issue.fields?.status?.name||'未知状态',key=norm(name);if(!groups.has(key))groups.set(key,{name,issues:[]});groups.get(key).issues.push(issue);}return [...groups.values()].sort((a,b)=>order(a.name)-order(b.name)||a.name.localeCompare(b.name));}
+ function sprints(value){return (Array.isArray(value)?value:value?[value]:[]).map(v=>{if(v&&typeof v==='object'){if(!/^\d+$/.test(String(v.id)))throw Error('Sprint ID 无效');return {id:String(v.id),name:v.name||String(v.id),state:v.state||''};}const raw=String(v),id=/\bid=(\d+)/.exec(raw),name=/\bname=(.*?)(?=,\w+=|\]$)/.exec(raw),state=/\bstate=([^,\]]+)/.exec(raw);if(!id)throw Error('无法识别 Sprint 字段格式');return {id:id[1],name:name?.[1]||id[1],state:state?.[1]||''};});}
+ const validSprint=s=>!/closed/i.test(s.name+' '+s.state);
+ function memberships(issue,mode,field){
+  if(mode==='sprint')return sprints(issue.fields?.[field]).filter(validSprint);
+  const value=issue.fields?.[field];if(value==null||value==='')return [{id:'none',name:'未分配 Epic'}];
+  if(field==='parent'&&value.fields?.issuetype&&!(/^(epic|史诗)$/.test(norm(value.fields.issuetype.name))||value.fields.issuetype.hierarchyLevel===1))return [{id:'none',name:'未分配 Epic'}];
+  const key=String(typeof value==='object'?value.key||'':value).trim().toUpperCase();if(!/^[A-Z][A-Z0-9_]*-\d+$/.test(key))throw Error(issue.key+' 的 Epic 关联编号格式无效');return [{id:key,name:key}];
+ }
+ function groups(issues,mode,field){const map=new Map();for(const issue of unique(issues.filter(isStory))){for(const m of memberships(issue,mode,field)){if(!map.has(m.id))map.set(m.id,{...m,issues:[]});const group=map.get(m.id);if(!group.issues.some(x=>x.key===issue.key))group.issues.push(issue);}}return [...map.values()].sort((a,b)=>a.id==='none'?1:b.id==='none'?-1:a.name.localeCompare(b.name));}
+ const metrics=[{id:'open',name:'Open',statuses:['open'],color:'#8b9db6'},{id:'dev',name:'Dev',statuses:['in progress'],color:'#3694ff'},{id:'test',name:'Test',statuses:['ready for test','testing'],color:'#9b63ff'}];
+ function buckets(issues){return metrics.map(metric=>({...metric,issues:unique(issues).filter(issue=>metric.statuses.includes(norm(issue.fields?.status?.name)))}));}
+ return {norm,isStory,unique,statuses,sprints,validSprint,groups,buckets,metrics};
+}
+if(typeof module==='object'&&module.exports)module.exports={createKanbanCore};
+
+// Kanban owns its requests, snapshot and controls; existing analysis modules are never invoked.
+(()=>{
+ const STATUS_ORDER=["New", "Grooming", "Open", "In Progress", "Ready For Test", "Testing", "Completed", "SIT", "Ready For UAT", "UAT", "Ready For Deploy", "DEPLOYED", "Done", "Cancelled"];
+   function pageQuery(doc, href) {
+    const url = new URL(href);
+    // The visible advanced search editor takes precedence over an old saved-filter ID.
+    for (const selector of ['#jqltextarea', 'textarea[name="jqlQuery"]', 'input[name="jql"]']) {
+      const el = doc.querySelector(selector);
+      let visible=!!el;
+      for(let node=el;node && visible;node=node.parentElement){
+        const style=doc.defaultView?.getComputedStyle(node);
+        if(node.hidden || node.getAttribute('aria-hidden')==='true' || style?.display==='none' || style?.visibility==='hidden')visible=false;
+      }
+      if (visible && el.value?.trim() && !el.disabled) {
+        return {jql:el.value.trim(), source:'当前页面 JQL'};
+      }
+    }
+    const jql=url.searchParams.get('jql');
+    if(jql?.trim()) return {jql:jql.trim(),source:'当前页面 URL JQL'};
+    const key=/\/browse\/([A-Z][A-Z0-9_]*-\d+)/i.exec(url.pathname)?.[1];
+    if(key) return {jql:'key = "'+key+'"',source:'当前任务页面'};
+    const filter=url.searchParams.get('filter');
+    if(filter && /^\d+$/.test(filter)) return {filter,source:'当前页面查询（从页面筛选器解析）'};
+    throw new Error('无法识别当前页面的查询条件。请在 Jira 问题列表点击 Search，或切换 Advanced 后重新载入。');
+  }
+
+ const core=createKanbanCore(STATUS_ORDER),view=hub.kanban;
+ const css=el('style',null,view);css.textContent=`
+ #kanban-view{background:#101318;color:#e8edf5;padding:22px}#kanban-view *{box-sizing:border-box}#kanban-view h2{font-size:22px;margin:0}#kanban-view h3{font-size:17px;margin:0 0 18px}#kanban-view p{color:#a1aec0;line-height:1.6}#kanban-view button,#kanban-view select{font:inherit;cursor:pointer;border:1px solid #374355;border-radius:8px;background:#202733;color:#e8edf5;padding:8px 12px}#kanban-view button:hover{background:#2d3a4e}#kanban-view button:focus-visible{outline:2px solid #69a8ff;outline-offset:3px}#kanban-view button:disabled{opacity:.5;cursor:default}#kanban-view .kb-top,#kanban-view .kb-tabs,#kanban-view .kb-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}#kanban-view .kb-top h2{flex:1}#kanban-view #kb-load{background:#2563eb;border-color:#2563eb;font-weight:600}#kanban-view .kb-tabs button[aria-selected=true]{background:#285bcd;border-color:#538aff}#kanban-view .kb-card{background:#191f28;border:1px solid #303b4b;border-radius:14px;padding:20px;margin:16px 0}#kanban-view .kb-card-top{display:flex;justify-content:space-between;align-items:center;gap:12px}#kanban-view .kb-count{border:0;background:none;padding:2px 5px;font-weight:700;color:#e8edf5}#kanban-view .kb-stack{display:flex;height:44px;overflow:hidden;border-radius:9px;background:#2a3443;margin:18px 0}#kanban-view .kb-stack button{border:0;border-right:2px solid #141920;border-radius:0;padding:0;min-width:30px;color:white;font-weight:700;text-shadow:0 1px 3px #0008}#kanban-view .kb-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}#kanban-view .kb-legend button{display:flex;gap:9px;align-items:center;border:0;background:transparent;text-align:left;padding:5px}#kanban-view .kb-legend strong{margin-left:auto}#kanban-view .kb-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}#kanban-view .kb-status{display:grid;grid-template-columns:150px minmax(60px,1fr) 40px;align-items:center;gap:12px;margin:12px 0}#kanban-view .kb-status-label{padding:0;border:0;background:none;text-align:left;font-size:12px}#kanban-view .kb-track{width:100%;height:14px;border:0;padding:0;border-radius:8px;background:#2b3543;overflow:hidden;display:block}#kanban-view .kb-track span{display:block;height:100%;border-radius:8px}#kanban-view #kb-groups{max-height:180px;overflow:auto;display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}#kanban-view #kb-groups label{display:flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid #374355;border-radius:8px;cursor:pointer;font-size:12px}#kanban-view input{accent-color:#458bff}#kanban-view .kb-chart{display:flex;gap:22px;min-height:270px;overflow-x:auto;padding-top:26px;border-bottom:1px solid #536075;background:repeating-linear-gradient(to top,transparent 0,transparent 58px,#6c7b8b22 59px,transparent 60px)}#kanban-view .kb-cluster{flex:1;min-width:140px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:12px}#kanban-view .kb-bars{height:220px;display:flex;gap:7px;align-items:flex-end;width:100%;max-width:180px}#kanban-view .kb-bar{position:relative;flex:1;min-width:25px;max-width:65px;border:0;border-radius:7px 7px 0 0;padding:0;color:#fff;font-weight:700;min-height:3px}#kanban-view .kb-bar span{position:absolute;top:-25px;left:0;width:100%;color:#e8edf5}#kanban-view .kb-group-name{font-size:12px;color:#c3cddd;text-align:center;max-width:210px;min-height:42px}#kanban-view .kb-group-name button{border:0;background:transparent;padding:0;font-size:12px}#kanban-view #kb-message{font-size:12px;margin:8px 0}#kanban-view .kb-pill{background:#252f40;border-radius:20px;padding:5px 12px;font-size:12px;color:#bad0ec}@media(max-width:700px){#kanban-view{padding:14px}#kanban-view .kb-status{grid-template-columns:110px minmax(50px,1fr) 30px;gap:7px}#kanban-view .kb-card{padding:14px}}
+ `;
+ const top=el('div',null,view);top.className='kb-top';el('h2','Kanban',top);el('span','今天 · 当前状态快照',top).className='kb-pill';
+ const load=el('button','载入当前查询',top);load.id='kb-load';
+ const tabs=el('div',null,view);tabs.className='kb-tabs';tabs.setAttribute('role','tablist');
+ const coeTab=el('button','COE · 状态分布',tabs),deliveryTab=el('button','Sprint / Epic · 今天',tabs);coeTab.id='kb-tab-coe';deliveryTab.id='kb-tab-delivery';
+ for(const tab of [coeTab,deliveryTab])tab.setAttribute('role','tab');
+ const message=el('p','点击“载入当前查询”读取全部分页中的 Story。',view);message.id='kb-message';message.setAttribute('role','status');
+ const coe=el('div',null,view),delivery=el('div',null,view);coe.id='kb-coe';delivery.id='kb-delivery';coe.setAttribute('role','tabpanel');delivery.setAttribute('role','tabpanel');coeTab.setAttribute('aria-controls','kb-coe');deliveryTab.setAttribute('aria-controls','kb-delivery');delivery.hidden=true;
+ coeTab.setAttribute('aria-selected','true');deliveryTab.setAttribute('aria-selected','false');
+ for(const [tab,panel,other] of [[coeTab,coe,delivery],[deliveryTab,delivery,coe]])tab.onclick=()=>{panel.hidden=false;other.hidden=true;coeTab.setAttribute('aria-selected',String(panel===coe));deliveryTab.setAttribute('aria-selected',String(panel===delivery));};
+ const toolbar=el('div',null,delivery);toolbar.className='kb-toolbar';el('span','分组',toolbar);const mode=el('select',null,toolbar);mode.id='kb-mode';for(const [id,label] of [['sprint','Sprint'],['epic','Epic']]){const option=el('option',label,mode);option.value=id;}
+ const all=el('button','全选有效分组',toolbar),none=el('button','清空',toolbar);all.id='kb-all';none.id='kb-none';
+ const choices=el('div',null,delivery);choices.id='kb-groups';const chart=el('div',null,delivery);chart.id='kb-delivery-chart';
+ el('p','Open = Open；Dev = In Progress；Test = Ready For Test + Testing。只统计当前状态，不计算昨日、上周或增减。其他状态仍保留在分组总数和明细中。',delivery);
+ const epicNames=new Map();let snapshot=[],fields=[],jql='',busy=false,snapshotTime='',requestNo=0;let groupData=[],selected=new Set();
+ const color=name=>{const n=core.norm(name);if(n==='cancelled')return '#e79539';if(n==='done')return '#16a357';if(n==='in progress')return '#3694ff';if(['ready for test','testing'].includes(n))return '#9b63ff';if(['new','grooming','open'].includes(n))return '#8b9db6';return '#13a899';};
+ const addCount=(parent,title,items)=>{const button=el('button',String(items.length),parent);button.className='kb-count';button.setAttribute('aria-label',title+'，'+items.length+' 条');button.onclick=()=>details(title,items);return button;};
+ function details(title,items){hub.showIssueDetails('Kanban · '+title,items.map(issue=>({issue,after:{name:issue.fields?.status?.name||'未知状态'}})),{before:'',after:'当前状态',current:true});}
+ function statusChart(){
+  coe.replaceChildren();const groups=core.statuses(snapshot),card=el('section',null,coe);card.className='kb-card';const top=el('div',null,card);top.className='kb-card-top';el('h3','Story Status Breakdown',top);const summary=el('span','Story 合计 ',top);addCount(summary,'全部 Story',snapshot);
+  const stack=el('div',null,card);stack.className='kb-stack';stack.setAttribute('aria-label','Story 当前状态分布');for(const group of groups.filter(x=>x.issues.length)){const button=el('button',String(group.issues.length),stack);button.style.flex=String(group.issues.length);button.style.background=color(group.name);button.dataset.kbStatus=group.name;button.title=group.name+'：'+group.issues.length;button.setAttribute('aria-label',button.title);button.onclick=()=>details(group.name,group.issues);}
+  const legend=el('div',null,card);legend.className='kb-legend';for(const group of groups){const button=el('button',null,legend);const dot=el('span',null,button);dot.className='kb-dot';dot.style.background=color(group.name);el('span',group.name,button);el('strong',String(group.issues.length),button);button.onclick=()=>details(group.name,group.issues);}
+  const breakdown=el('section',null,coe);breakdown.className='kb-card';el('h3','Status · 当前数量',breakdown);for(const group of groups){const row=el('div',null,breakdown);row.className='kb-status';const label=el('button',group.name.toUpperCase(),row);label.className='kb-status-label';label.onclick=()=>details(group.name,group.issues);const track=el('button',null,row);track.className='kb-track';track.setAttribute('aria-label',group.name+'，'+group.issues.length+' 条');const fill=el('span',null,track);fill.style.width=(snapshot.length?group.issues.length/snapshot.length*100:0)+'%';fill.style.background=color(group.name);track.onclick=label.onclick;addCount(row,group.name,group.issues);}
+  el('p','统计当前查询全部 Story，包含已完成状态；不受 COE 预警规则的状态范围限制，不执行预警扫描或通知。',coe);
+ }
+ function selectedChart(){
+  chart.replaceChildren();const chosen=groupData.filter(x=>selected.has(x.id));if(!chosen.length){el('p','没有选中有效分组。可选择其他分组，或切换 Sprint / Epic。',chart);return;}
+  const card=el('section',null,chart);card.className='kb-card';el('h3',(mode.value==='sprint'?'Sprint':'Epic')+' · 今天',card);const max=Math.max(1,...chosen.flatMap(group=>core.buckets(group.issues).map(x=>x.issues.length)));
+  const clusters=el('div',null,card);clusters.className='kb-chart';clusters.setAttribute('aria-label','各分组 Open、Dev、Test 当前工单数量');
+  for(const group of chosen){const cluster=el('div',null,clusters);cluster.className='kb-cluster';const bars=el('div',null,cluster);bars.className='kb-bars';for(const metric of core.buckets(group.issues)){const bar=el('button',null,bars);bar.className='kb-bar';bar.dataset.kbGroup=group.id;bar.dataset.kbMetric=metric.id;bar.style.height=Math.max(2,metric.issues.length/max*100)+'%';bar.style.background=metric.color;bar.setAttribute('aria-label',group.name+' · '+metric.name+'：'+metric.issues.length);el('span',String(metric.issues.length),bar);bar.onclick=()=>details(group.name+' · '+metric.name,metric.issues);}
+   const name=el('div',null,cluster);name.className='kb-group-name';const title=el('button',group.name+' · '+group.issues.length+' Stories',name);title.onclick=()=>details(group.name,group.issues);
+  }
+  const legend=el('div',null,card);legend.className='kb-legend';for(const metric of core.metrics){const button=el('button',null,legend);const dot=el('span',null,button);dot.className='kb-dot';dot.style.background=metric.color;el('span',metric.name,button);const issues=core.unique(chosen.flatMap(group=>core.buckets(group.issues).find(x=>x.id===metric.id).issues));el('strong',String(issues.length),button);button.onclick=()=>details('所选分组 · '+metric.name,issues);}
+  el('p','柱高按本次所选分组的最大数量缩放。图例合计按 Jira 编号去重；同一 Story 可属于多个 Sprint，各 Sprint 数量不可直接相加。',card);
+ }
+ function setGroups(){
+  choices.replaceChildren();chart.replaceChildren();groupData=[];selected=new Set();if(!snapshotTime)return;
+  const type=mode.value==='sprint'?'com.pyxis.greenhopper.jira:gh-sprint':'com.pyxis.greenhopper.jira:gh-epic-link',candidates=fields.filter(f=>f.schema?.custom===type);
+  if(candidates.length>1){el('p','无法唯一识别 '+mode.value+' 字段，请检查字段定义。',chart);return;}const field=candidates[0]?.id||(mode.value==='epic'&&fields.some(x=>x.id==='parent')?'parent':null);
+  if(!field){el('p','当前 Jira 未提供 '+mode.value+' 关联字段。',chart);return;}
+  try{groupData=core.groups(snapshot,mode.value,field).map(group=>({...group,name:mode.value==='epic'?(epicNames.get(group.id)||group.name):group.name}));}catch(error){el('p',error.message,chart);return;}
+  for(const group of groupData){const label=el('label',null,choices),check=el('input',null,label);check.type='checkbox';check.value=group.id;check.checked=true;selected.add(group.id);label.append(document.createTextNode(group.name));check.onchange=()=>{check.checked?selected.add(group.id):selected.delete(group.id);selectedChart();};}selectedChart();
+ }
+ mode.onchange=setGroups;all.onclick=()=>{for(const input of choices.querySelectorAll('input')){input.checked=true;selected.add(input.value);}selectedChart();};none.onclick=()=>{for(const input of choices.querySelectorAll('input'))input.checked=false;selected.clear();selectedChart();};
+ async function api(path){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{const response=await fetch(path,{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});if(!response.ok)throw Error('Jira HTTP '+response.status+'，请检查登录和查询权限。');if(!response.headers.get('content-type')?.includes('application/json'))throw Error('接口返回登录页或非 JSON，请重新登录 Jira。');return await response.json();}finally{clearTimeout(timer);}}
+ load.onclick=async()=>{if(busy)return;busy=true;load.disabled=true;const run=++requestNo;snapshot=[];snapshotTime='';coe.replaceChildren();choices.replaceChildren();chart.replaceChildren();groupData=[];selected.clear();message.style.color='';try{
+  const query=pageQuery(document,location.href);jql=query.jql||(await api('/rest/api/2/filter/'+query.filter)).jql;if(!jql?.trim())throw Error('未获取到有效 JQL，请先在 Jira 执行搜索。');
+  fields=await api('/rest/api/2/field');if(!Array.isArray(fields))throw Error('字段接口格式异常');const keys=fields.filter(f=>['com.pyxis.greenhopper.jira:gh-sprint','com.pyxis.greenhopper.jira:gh-epic-link'].includes(f.schema?.custom)).map(f=>f.id);const wanted=['summary','status','assignee','issuetype','parent',...keys].join(',');
+  let start=0,total;const found=[],seen=new Set();do{const page=await api('/rest/api/2/search?'+new URLSearchParams({jql,fields:wanted,startAt:String(start),maxResults:'100'}));if(!Array.isArray(page.issues)||!Number.isInteger(page.total)||page.total<0)throw Error('搜索分页格式异常');if(total!==undefined&&total!==page.total)throw Error('查询条目数变化，请重新载入');total=page.total;if(!page.issues.length&&start<total)throw Error('分页提前结束，已停止以避免遗漏');for(const issue of page.issues){if(!issue.key||seen.has(issue.key))throw Error('分页出现重复或无效工单，请重新载入');if(!issue.fields?.issuetype?.name)throw Error(issue.key+' 未返回工单类型，无法确认 Story 范围');seen.add(issue.key);found.push(issue);}start+=page.issues.length;message.textContent='读取 '+start+' / '+total+'…';}while(start<total);
+  if(found.length!==total)throw Error('分页条目数不一致');if(run!==requestNo)return;snapshot=found.filter(core.isStory);epicNames.clear();
+  const epicFields=fields.filter(f=>f.schema?.custom==='com.pyxis.greenhopper.jira:gh-epic-link');const epicField=epicFields.length===1?epicFields[0].id:fields.some(f=>f.id==='parent')?'parent':null;
+  if(epicField){const keys=[...new Set(snapshot.flatMap(issue=>{try{return core.groups([issue],'epic',epicField).map(g=>g.id).filter(id=>id!=='none');}catch{return [];}}))];for(let start=0;start<keys.length;start+=50){try{const page=await api('/rest/api/2/search?'+new URLSearchParams({jql:'key in ('+keys.slice(start,start+50).join(',')+')',fields:'summary,issuetype',maxResults:'50'}));for(const issue of page.issues||[])if(keys.includes(issue.key)&&(/^(epic|史诗)$/i.test(issue.fields?.issuetype?.name||'')||issue.fields?.issuetype?.hierarchyLevel===1))epicNames.set(issue.key,issue.key+' · '+(issue.fields?.summary||''));}catch{/* Labels only; never add these issues to the Story snapshot. */}}}
+  snapshotTime=new Date().toLocaleString('zh-CN',{hour12:false});statusChart();setGroups();message.textContent='截至 '+snapshotTime+' · 当前查询 '+total+' 条，其中 Story '+snapshot.length+' 条 · 只读取当前状态，无历史对比。';
+ }catch(error){snapshot=[];snapshotTime='';coe.replaceChildren();choices.replaceChildren();chart.replaceChildren();message.style.color='#ff9f9f';message.textContent=error.message;}finally{busy=false;load.disabled=false;}};
 })();
 
 hub.startScheduled();hub.startBrowserScheduler();
