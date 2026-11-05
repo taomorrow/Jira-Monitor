@@ -3,12 +3,12 @@ import hashlib
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.11.0').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.10.4').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      api.powerplatform.com','// @connect      api.powerplatform.com\n// @connect      raw.githubusercontent.com')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_openInTab\n// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.11.0')
+t=t[t.index('(function ()'):].replace('5.5.4','6.10.4')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -84,7 +84,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.11.0',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.10.4',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -258,7 +258,6 @@ t=t.replace("    add('h2','配置中心');", "    add('h2','Configuration');hub.
 # Insert inside the module closure, after all function declarations are available.
 s=s.replace("  $('teams-preview').onclick=teamsPreview;", (root/'src/job-analysis.js').read_text()+"\n  $('teams-preview').onclick=teamsPreview;")
 epic=epic.replace("  $('teams-preview').onclick=teamsPreview;", (root/'src/job-analysis.js').read_text().replace("['sprint']", "['epic']").replace('Sprint','Epic')+"\n  $('teams-preview').onclick=teamsPreview;")
-s=s.replace('  function pageQuery(doc, href) {', '  hub.pageQuery=pageQuery;hub.statusOrder=STATUS_NAMES;\n  function pageQuery(doc, href) {')
 s=s.replace('<h1>Sprint Analysis', '<h1>Sprint')
 # Sprint defaults and select-all share the same eligibility rule; Epic remains unchanged.
 s=s.replace("/^active$/i.test(s.state)", "!hub.closedSprint(s.name+' '+s.state)&&s.id!==NONE")
@@ -270,4 +269,4 @@ s=s.replace("      $('attach-report').checked=job.attach;await run();", "      i
 s=s.replace("    if(failure)throw failure;", "    if(failure)throw failure;if(skipped)return;")
 
 
-(root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n'+epic+'\n'+(root/'src/due.js').read_text()+'\nhub.startScheduled();hub.startBrowserScheduler();\n})();\n')
+(root/'jiraMonitor.user.js').write_text(header+hub+t+'\n'+s+'\n'+epic+'\nhub.startScheduled();hub.startBrowserScheduler();\n})();\n')

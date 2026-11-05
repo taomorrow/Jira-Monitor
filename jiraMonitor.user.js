@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.11.0
+// @version      6.10.4
 // @description  COE、Sprint、Epic 分析；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -48,23 +48,23 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.11.0',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.10.4',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
-const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),dueTab=el('button','◴  Due',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';dueTab.id='nav-due';
-const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content),epic=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';epic.id='epic-view';const due=el('section',null,content);due.id='due-view';due.hidden=true;epic.hidden=sprint.hidden=settings.hidden=true;
+const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
+const content=el('main',null,workspace),timeout=el('section',null,content),sprint=el('section',null,content),settings=el('section',null,content),epic=el('section',null,content);timeout.id='timeout-view';sprint.id='sprint-view';settings.id='settings-view';epic.id='epic-view';epic.hidden=sprint.hidden=settings.hidden=true;
 const grip=el('div',null,shell);grip.id='resize-grip';grip.setAttribute('aria-label','拖动调整窗口大小');
 const detail=el('div');detail.id='detail-popup';detail.hidden=true;const detailHeader=el('div',null,detail);detailHeader.id='detail-header';el('strong','◷  详情分析',detailHeader);el('span','独立浮窗',detailHeader);const detailClose=el('button','❌',detailHeader);detailClose.id='detail-close';detailClose.setAttribute('aria-label','关闭详情分析');const detailContent=el('div',null,detail);detailContent.id='detail-content';
 let geometry=GM_getValue('jira-monitor-window-v1',{}),activeView='timeout',dismissedDetail='';
 function fit(g){const maxW=Math.max(1,innerWidth-24),maxH=Math.max(1,innerHeight-24);const width=Math.max(Math.min(620,maxW),Math.min(Number(g.width)||960,maxW)),height=Math.max(Math.min(360,maxH),Math.min(Number(g.height)||620,maxH));return {width,height,left:Math.max(12,Math.min(Number.isFinite(g.left)?g.left:(innerWidth-width)/2,innerWidth-width-12)),top:Math.max(12,Math.min(Number.isFinite(g.top)?g.top:(innerHeight-height)/2,innerHeight-height-12))};}
 function layout(){geometry=fit(geometry);Object.assign(shell.style,{width:geometry.width+'px',height:geometry.height+'px',left:geometry.left+'px',top:geometry.top+'px'});}layout();
 function drag(node,resizing){node.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('button'))return;e.preventDefault();const start={...geometry},x=e.clientX,y=e.clientY;node.setPointerCapture?.(e.pointerId);const move=event=>{geometry=resizing?{...start,width:start.width+event.clientX-x,height:start.height+event.clientY-y}:{...start,left:start.left+event.clientX-x,top:start.top+event.clientY-y};layout();};const end=()=>{node.removeEventListener('pointermove',move);node.removeEventListener('pointerup',end);node.removeEventListener('pointercancel',end);GM_setValue('jira-monitor-window-v1',geometry);};node.addEventListener('pointermove',move);node.addEventListener('pointerup',end);node.addEventListener('pointercancel',end);});}drag(header,false);drag(grip,true);addEventListener('resize',layout);
-const hub={due,closedSprint:value=>/closed/i.test(String(value)),timeout,sprint,epic,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
- show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';epic.hidden=which!=='epic';due.hidden=which!=='due';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[epicTab,'epic'],[config,'settings'],[dueTab,'due']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
+const hub={closedSprint:value=>/closed/i.test(String(value)),timeout,sprint,epic,settings,detail:detailContent,autoDetail:GM_getValue('jira-monitor-auto-detail',false)===true,
+ show(which='timeout'){if(which==='timeout'&&/^\/browse\//i.test(location.pathname)){shell.hidden=true;return;}activeView=which;shell.hidden=false;timeout.hidden=which!=='timeout';sprint.hidden=which!=='sprint';settings.hidden=which!=='settings';epic.hidden=which!=='epic';[[timeoutTab,'timeout'],[sprintTab,'sprint'],[epicTab,'epic'],[config,'settings']].forEach(([b,key])=>b.setAttribute('aria-selected',String(which===key)));layout();},
  hide(){shell.hidden=true;launcher.focus();},syncRoute(){if(/^\/browse\//i.test(location.pathname)&&activeView==='timeout')shell.hidden=true;},syncDetail(){detail.hidden=!hub.autoDetail||!/^\/browse\//i.test(location.pathname)||dismissedDetail===location.pathname;},
  openDetail(){dismissedDetail='';hub.syncDetail();},setAuto(value){hub.autoDetail=value;GM_setValue('jira-monitor-auto-detail',value);if(value){dismissedDetail='';hub.startDetail?.();}else hub.stopDetail?.();hub.syncDetail();},
  refreshSettings(){hub.configure?.();}};
-launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');epicTab.onclick=()=>hub.show('epic');dueTab.onclick=()=>hub.show('due');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
+launcher.onclick=()=>{if(launcherDragged){launcherDragged=false;return;}hub.show();};timeoutTab.onclick=()=>hub.show();sprintTab.onclick=()=>hub.show('sprint');epicTab.onclick=()=>hub.show('epic');config.onclick=()=>hub.configure?.();close.onclick=()=>hub.hide();detailClose.onclick=()=>{dismissedDetail=location.pathname;hub.syncDetail();};
 root.addEventListener('keydown',e=>{if(e.key==='Escape'&&!root.querySelector('dialog[open]'))hub.hide();});
 if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('Jira Monitor：打开统一面板',()=>hub.show());
   function validateTeamsUrl(value){
@@ -131,8 +131,8 @@ hub.showIssueDetails=(title,items,period)=>{
   const backdrop=add('div',null,root);backdrop.className='backdrop';const panel=add('section',null,backdrop);panel.className='window';panel.setAttribute('role','dialog');panel.setAttribute('aria-modal','true');panel.setAttribute('aria-label',title);
   const header=add('header',null,panel);add('h2',title,header);const close=add('button','❌',header);close.setAttribute('aria-label','关闭工单明细');const focus=document.activeElement;
   const dismiss=()=>{host.remove();focus?.focus();};close.onclick=dismiss;backdrop.onclick=e=>{if(e.target===backdrop)dismiss();};root.addEventListener('keydown',e=>{if(e.key==='Escape'){e.stopPropagation();dismiss();}});
-  const body=add('main',null,panel),search=add('input',null,body);search.placeholder='搜索 Jira 编号、摘要、Assignee 或状态';search.setAttribute('aria-label','筛选工单明细');const count=add('small',null,body),table=add('table',null,body),head=add('thead',null,table),tr=add('tr',null,head);['Jira','摘要','Assignee',period.due?'当前状态':period.before+' → '+period.after].forEach(x=>add('th',x,tr));const rows=add('tbody',null,table);
-  const render=()=>{rows.replaceChildren();const query=search.value.trim().toLowerCase(),filtered=items.filter(x=>[x.issue.key,x.issue.fields.summary,x.issue.fields.assignee?.displayName,x.before?.name,x.after?.name].join(' ').toLowerCase().includes(query));count.textContent=filtered.length+' / '+items.length+' 条';for(const x of filtered){const row=add('tr',null,rows),cell=add('td',null,row),a=add('a',x.issue.key,cell);a.href=location.origin+'/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';add('td',x.issue.fields.summary||'',row);add('td',x.issue.fields.assignee?.displayName||'未分配',row);add('td',period.due?(x.after?.name||'未知状态'):(x.before?.name||'尚未创建')+' → '+(x.after?.name||'尚未创建'),row);}};search.oninput=render;render();close.focus();
+  const body=add('main',null,panel),search=add('input',null,body);search.placeholder='搜索 Jira 编号、摘要、Assignee 或状态';search.setAttribute('aria-label','筛选工单明细');const count=add('small',null,body),table=add('table',null,body),head=add('thead',null,table),tr=add('tr',null,head);['Jira','摘要','Assignee',period.before+' → '+period.after].forEach(x=>add('th',x,tr));const rows=add('tbody',null,table);
+  const render=()=>{rows.replaceChildren();const query=search.value.trim().toLowerCase(),filtered=items.filter(x=>[x.issue.key,x.issue.fields.summary,x.issue.fields.assignee?.displayName,x.before?.name,x.after?.name].join(' ').toLowerCase().includes(query));count.textContent=filtered.length+' / '+items.length+' 条';for(const x of filtered){const row=add('tr',null,rows),cell=add('td',null,row),a=add('a',x.issue.key,cell);a.href=location.origin+'/browse/'+encodeURIComponent(x.issue.key);a.target='_blank';a.rel='noopener noreferrer';add('td',x.issue.fields.summary||'',row);add('td',x.issue.fields.assignee?.displayName||'未分配',row);add('td',(x.before?.name||'尚未创建')+' → '+(x.after?.name||'尚未创建'),row);}};search.oninput=render;render();close.focus();
 };
 // Load the native installer only after the user chooses Export; never during Jira startup.
 let macTemplatePromise;
@@ -361,11 +361,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.11.0 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.10.4 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.11.0 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.10.4 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -1355,7 +1355,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.11.0 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.10.4 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1457,7 +1457,6 @@ initTimeout();initTimeout(true);
     return [...rows,{name:'所选状态合计',before:rows.flatMap(r=>r.before),after:rows.flatMap(r=>r.after)}];
   }
   function csvCell(v) { let s=String(v ?? ''); if (/^[\s]*[=+\-@]/.test(s)) s="'"+s; return '"'+s.replaceAll('"','""')+'"'; }
-  hub.pageQuery=pageQuery;hub.statusOrder=STATUS_NAMES;
   function pageQuery(doc, href) {
     const url = new URL(href);
     // The visible advanced search editor takes precedence over an old saved-filter ID.
@@ -2374,35 +2373,6 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     for(const g of groups){const stats=rowsWithTotal(g);for(const r of stats)rows.push([g.id,g.name,r.name,r.before.length,r.after.length,r.after.length-r.before.length,rate(r.before.length,r.after.length)]);}
     const blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='jira-epic-analysis-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
-})();
-
-// Current-query Due date and status snapshot; never expands the query or changes issues.
-(()=>{
- const view=hub.due;view.style.cssText='background:#f7f9fc';
- const css=el('style',null,view);css.textContent='#due-view button{cursor:pointer;border:1px solid #dbe3f0;border-radius:7px;padding:7px 12px;background:white;color:#245de8}#due-view #due-load{background:#245de8;color:white}#due-view .due-card{background:white;border:1px solid #dbe3f0;border-radius:12px;padding:16px;margin:14px 0}#due-view table{width:100%;border-collapse:collapse}#due-view th,#due-view td{text-align:left;border-bottom:1px solid #edf1f7;padding:9px}#due-view p{color:#718098}#due-view .due-count{border:0;padding:0;text-decoration:underline;font-weight:700}';
- el('h2','Due',view);el('p','读取当前查询全部分页，按 Due 日期及当前 Status 分类；未填写日期的工单单列。点击数量查看明细。',view);
- const load=el('button','载入并分析当前页面（全部分页）',view);load.id='due-load';
- const message=el('p','点击载入开始分析。',view);message.id='due-message';message.setAttribute('role','status');
- const results=el('div',null,view);results.id='due-results';let busy=false;
- async function api(path){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{const r=await fetch(path,{credentials:'same-origin',headers:{Accept:'application/json'},signal:controller.signal});if(!r.ok)throw Error('Jira HTTP '+r.status+'，请检查登录及查询权限。');if(!r.headers.get('content-type')?.includes('application/json'))throw Error('接口返回非 JSON，请重新登录 Jira。');return await r.json();}finally{clearTimeout(timer);}}
- const norm=x=>String(x||'').trim().toLowerCase();
- function render(issues){
-  const dates=new Map();for(const issue of issues){const value=issue.fields?.duedate,date=/^\d{4}-\d{2}-\d{2}$/.test(value||'')?value:'未设置 Due';if(!dates.has(date))dates.set(date,[]);dates.get(date).push(issue);}
-  const count=(parent,label,items)=>{const button=el('button',String(items.length),parent);button.className='due-count';button.setAttribute('aria-label',label+'，'+items.length+' 条');button.onclick=()=>hub.showIssueDetails('Due · '+label,items.map(issue=>({issue,after:{name:issue.fields?.status?.name||'未知状态'}})),{before:'',after:'当前状态',due:true});};
-  const total=el('div',null,results);total.className='due-card';el('strong','当前查询合计：',total);count(total,'全部日期',issues);
-  for(const [date,items] of [...dates].sort(([a],[b])=>a==='未设置 Due'?1:b==='未设置 Due'?-1:a.localeCompare(b))){
-   const card=el('section',null,results);card.className='due-card';const title=el('h3','Due · '+date+' · ',card);count(title,date,items);
-   const table=el('table',null,card),thead=el('thead',null,table),head=el('tr',null,thead);el('th','Status',head);el('th','数量',head);const body=el('tbody',null,table),statuses=new Map();
-   for(const issue of items){const name=issue.fields?.status?.name||'未知状态',key=norm(name);if(!statuses.has(key))statuses.set(key,{name,items:[]});statuses.get(key).items.push(issue);}
-   const rank=name=>{const n=hub.statusOrder.findIndex(x=>norm(x)===norm(name));return n<0?999:n;};
-   for(const group of [...statuses.values()].sort((a,b)=>rank(a.name)-rank(b.name)||a.name.localeCompare(b.name))){const row=el('tr',null,body);el('td',group.name,row);count(el('td',null,row),date+' · '+group.name,group.items);}
-  }
- }
- load.onclick=async()=>{if(busy)return;busy=true;load.disabled=true;results.replaceChildren();message.style.color='';try{
-  const query=hub.pageQuery(document,location.href);const jql=query.jql||(await api('/rest/api/2/filter/'+query.filter)).jql;if(!jql?.trim())throw Error('未获取到有效查询，请先打开 Jira 列表并执行搜索。');
-  let start=0,total;const issues=[],seen=new Set();do{const page=await api('/rest/api/2/search?'+new URLSearchParams({jql,fields:'summary,status,assignee,duedate',startAt:String(start),maxResults:'100'}));if(!Array.isArray(page.issues)||!Number.isInteger(page.total)||page.total<0)throw Error('搜索分页格式异常');if(total!==undefined&&total!==page.total)throw Error('查询条目数变化，请重新载入');total=page.total;if(!page.issues.length&&start<total)throw Error('分页提前结束，已停止以避免遗漏');for(const issue of page.issues){if(!issue.key||seen.has(issue.key))throw Error('分页出现重复或无效工单，请重试');seen.add(issue.key);issues.push(issue);}start+=page.issues.length;message.textContent='读取 '+start+' / '+total+'…';}while(start<total);
-  if(issues.length!==total)throw Error('分页条目数不一致，请重试');render(issues);message.textContent='已分析 '+total+' 条工单 · '+new Date().toLocaleString('zh-CN',{hour12:false})+' · 仅当前查询范围';
- }catch(error){results.replaceChildren();message.style.color='#c9372c';message.textContent=error.message;}finally{busy=false;load.disabled=false;}};
 })();
 
 hub.startScheduled();hub.startBrowserScheduler();
