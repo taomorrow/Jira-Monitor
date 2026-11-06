@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.2
+# Jira Monitor v6.12.3
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -157,7 +157,7 @@ Mac 应用二进制不再内嵌在用户脚本里，仅点击“导出 Mac 定�
 
 COE 批量收集时排除 Bug，逐条 REST 读取时再次核对，详情中的 Bug 也跳过，不进入结果、Excel、报告或通知。DEV 读取 Story 下属条目时只接受 Sub-task / Subtask（或 Jira 明确标记 subtask=true 的非 Bug 类型）；Bug 及其他普通类型不参与负责人收集。条目缺少类型时按编号补取类型和负责人，无法确认类型时暂停而非猜测。直接扫描 Sub-task 时使用该 Sub-task 自身负责人；Story 的 DEV 仍从已确认子任务收集并去重，DCT 保持原负责人规则。升级前旧结果请停止后重新扫描。
 
-## v6.12.2：固定 Jira 标签页调度
+## v6.12.3：固定 Jira 标签页调度
 
 在“配置中心 → 定时 Job”保存配置后，点击“设此标签页为调度页”，再右键浏览器标签选择“固定”。无需 Mac 安装器。每 30 秒只检查本地时钟及配置，到点新建后台任务标签执行；多个调度页防重复、多个 Job 分析串行。更改时间或通知后保存即生效。停止调度不取消正在执行的任务。
 
@@ -176,3 +176,9 @@ COE 可勾选“无预警工单时推送扫描摘要”：扫描完成且项目�
 - 当前状态是接口读取时的快照，刷新数据请重新载入。Kanban 不新增 Job 菜单。可在“推送当前 Tab”选择项目、Teams / 邮件及交互附件，预览后确认推送。
 
 Kanban 自动隐藏数量为 0 的状态，以及 Open / Dev / Test 全部为 0 的 Sprint / Epic 分组。发送内容沿用当前 Tab 和所选分组、按项目隔离；Teams 超限时若已选择邮件则仅发邮件。Teams 和邮件正文展示统计图表，点击色块、条形或数量打开对应 Jira 工单集合；HTML 交互附件中的图表点击后弹窗展示 Jira、摘要、Assignee 和状态。Sprint / Epic 分组纵向排列，按 Story 总量从多到少排序，无需横向滚动。Teams 使用原生自适应卡片，颜色和间距由 Teams 控制。
+
+### v6.12.3：Kanban COE 负责人统计
+
+COE 保留总状态分布，移除重复的“Status · 当前数量”。新增 Story Assignee 分组，按总数量降序显示状态数量和进度，未分配负责人单独列出。进度为 Completed / Complete、SIT、Ready For UAT、UAT、Ready For Deploy、DEPLOYED、Done 的数量除以全部 Story；Cancelled 保留在分母，不计入完成。页面与 HTML 报告的数量支持明细弹窗；邮件与 Teams 同步包含负责人统计。
+
+HTML 报告的图例改为自动换行的完整标签，小色块按真实比例绘制，放不下的数字在图例展示。Sprint / Epic 条形修正了预留数字空间造成的长度截短。

@@ -1,0 +1,3 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+
+test('assignee progress counts Completed and later workflow states but excludes Cancelled',()=>{const {createKanbanCore}=require('../src/kanban-core.js'),core=createKanbanCore(['Open','Completed','SIT','Done','Cancelled']);const issues=['Open','Completed','SIT','Done','Cancelled'].map((name,i)=>({key:'CSP-'+i,fields:{status:{name},assignee:{key:'alice',displayName:'Alice'}}}));const [person]=core.assignees(issues);assert.equal(person.issues.length,5);assert.equal(person.completed.length,3);assert.equal(person.statuses.length,5);assert.equal(core.assignees([{key:'X-1',fields:{}}])[0].name,'未分配');});
