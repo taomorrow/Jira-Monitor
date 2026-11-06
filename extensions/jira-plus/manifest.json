@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Jira+",
+  "version": "6.10.4.1",
+  "description": "基于 Jira Monitor 6.10.4 的独立扩展：COE、Sprint、Epic、项目通知与固定标签 Job。",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://jira.xpaas.lenovo.com/*",
+    "https://*.api.powerplatform.com/*",
+    "https://*.logic.azure.com/*",
+    "https://*.api.powerautomate.com/*",
+    "https://raw.githubusercontent.com/*",
+    "https://api.powerplatform.com/*",
+    "https://logic.azure.com/*",
+    "https://api.powerautomate.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://jira.xpaas.lenovo.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_title": "Jira+ · 打开面板（右键可管理配置）",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png"
+    }
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

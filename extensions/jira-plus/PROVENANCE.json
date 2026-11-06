@@ -1,0 +1,11 @@
+{
+  "name": "Jira+",
+  "extensionVersion": "6.10.4.1",
+  "baseVersion": "6.10.4",
+  "repository": "https://github.com/taomorrow/Jira-Monitor",
+  "baseCommit": "1c1f74ab6ac1e3383ebd9c0082369b735f17a30d",
+  "baseFile": "jiraMonitor.user.js",
+  "sha256": "abb5fdd0fa94f30b468360a3cb29a27d91128f35d69fa2ff3566880a41303522",
+  "changes": ["MV3 isolated content script", "Chrome storage and background request adapters", "Jira+ branding and namespaced identifiers", "configuration import/export"],
+  "updates": "GitHub manual install; not yet published to a browser extension store"
+}
