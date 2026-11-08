@@ -11,7 +11,7 @@
     let displayed=0;
     for(const {item,report} of reports){
       const mentions=report.attachments[0].content.msteams.entities||[],owner=report.attachments[0].content.body[2].text.replace(/^(负责人|通知负责人)：/,'');
-      const block={type:'Container',separator:true,items:[{type:'TextBlock',text:'['+item.key+']('+location.origin+'/browse/'+encodeURIComponent(item.key)+') · '+(owner||'未分配'),weight:'Bolder',wrap:true},{type:'TextBlock',text:String(item.summary||'').slice(0,180),wrap:true,spacing:'Small'},...report.rules.map(r=>({type:'TextBlock',text:r.name+' · '+r.sla+' · '+r.days.toFixed(2)+'天',color:/^dev$/i.test(r.name)?'Warning':'Default',wrap:true,spacing:'Small'}))]};
+      const block={type:'Container',separator:true,items:[{type:'TextBlock',text:'['+item.key+']('+location.origin+'/browse/'+encodeURIComponent(item.key)+') · '+(owner||'未分配'),weight:'Bolder',wrap:true},{type:'TextBlock',text:String(item.summary||'').slice(0,180),wrap:true,spacing:'Small'},...report.rules.map(r=>({type:'TextBlock',text:r.name+' · '+r.sla+' · '+r.days.toFixed(2)+'天',color:r.level==='overdue'?'Attention':'Warning',wrap:true,spacing:'Small'}))]};
       const previousEntities=[...card.msteams.entities];for(const mention of mentions)if(!card.msteams.entities.some(x=>x.mentioned.id.toLowerCase()===mention.mentioned.id.toLowerCase()))card.msteams.entities.push(mention);
       body.push(block);
       if(new TextEncoder().encode(JSON.stringify(attachment)).length>23*1024){body.pop();card.msteams.entities=previousEntities;break;}displayed++;
