@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.7
+# Jira Monitor v6.12.8
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -157,7 +157,7 @@ Mac 应用二进制不再内嵌在用户脚本里，仅点击“导出 Mac 定�
 
 COE 批量收集时排除 Bug，逐条 REST 读取时再次核对，详情中的 Bug 也跳过，不进入结果、Excel、报告或通知。DEV 读取 Story 下属条目时只接受 Sub-task / Subtask（或 Jira 明确标记 subtask=true 的非 Bug 类型）；Bug 及其他普通类型不参与负责人收集。条目缺少类型时按编号补取类型和负责人，无法确认类型时暂停而非猜测。直接扫描 Sub-task 时使用该 Sub-task 自身负责人；Story 的 DEV 仍从已确认子任务收集并去重，DCT 保持原负责人规则。升级前旧结果请停止后重新扫描。
 
-## v6.12.7：固定 Jira 标签页调度
+## v6.12.8：固定 Jira 标签页调度
 
 在“配置中心 → 定时 Job”保存配置后，点击“设此标签页为调度页”，再右键浏览器标签选择“固定”。无需 Mac 安装器。每 30 秒只检查本地时钟及配置，到点新建后台任务标签执行；多个调度页防重复、多个 Job 分析串行。更改时间或通知后保存即生效。停止调度不取消正在执行的任务。
 
@@ -177,24 +177,30 @@ COE 可勾选“无预警工单时推送扫描摘要”：扫描完成且项目�
 
 Kanban 自动隐藏数量为 0 的状态，以及 Open / Dev / Test 全部为 0 的 Sprint / Epic 分组。发送内容沿用当前 Tab 和所选分组、按项目隔离；Teams 超限时若已选择邮件则仅发邮件。Teams 和邮件正文展示统计图表，点击色块、条形或数量打开对应 Jira 工单集合；HTML 交互附件中的图表点击后弹窗展示 Jira、摘要、Assignee 和状态。Sprint / Epic 分组纵向排列，按 Story 总量从多到少排序，无需横向滚动。Teams 使用原生自适应卡片，颜色和间距由 Teams 控制。
 
-### v6.12.7：Kanban COE 负责人统计
+### v6.12.8：Kanban COE 负责人统计
 
 COE 保留总状态分布，移除重复的“Status · 当前数量”。新增 Story Assignee 分组，按总数量降序显示状态数量和进度，未分配负责人单独列出。进度为 Completed / Complete、SIT、Ready For UAT、UAT、Ready For Deploy、DEPLOYED、Done 的数量除以全部 Story；Cancelled 保留在分母，不计入完成。页面与 HTML 报告的数量支持明细弹窗；邮件与 Teams 同步包含负责人统计。
 
 HTML 报告的图例改为自动换行的完整标签，状态条连续填满容器，小色块保留最小标签宽度并显示数字。Sprint / Epic 条形修正了预留数字空间造成的长度截短。
 
-### v6.12.7：完整状态条与科技配色
+### v6.12.8：完整状态条与科技配色
 
 状态条连续填满可用宽度，保留所有数字，消除分段边框造成的空隙。小色块保留可读宽度，完整数量同时显示在图例中。页面、邮件和交互报告采用蓝、青、紫色系；进度条仍依真实百分比显示。
 
-### v6.12.7：Assignee 紧凑行布局
+### v6.12.8：Assignee 紧凑行布局
 
 每人一行，左侧姓名，中间按该负责人各状态数量占比填满的状态条，右侧仅显示完成进度百分比。状态色块悬停显示状态、数量和占比，点击打开对应工单；姓名可查看全部工单，百分比可查看完成阶段工单。页面、HTML 附件、邮件和 Teams 同步采用行布局；Teams 外观由客户端控制。
 
-### v6.12.7：Kanban 状态配色与紧凑指标
+### v6.12.8：Kanban 状态配色与紧凑指标
 
 In Progress / Dev 使用红色；Ready For Test、Testing、Completed 使用黄色层次；New、Grooming、Open 使用深蓝层次；SIT 及后续状态使用黑灰层次。仅调整颜色，Sprint / Epic 的 Test 统计范围仍为 Ready For Test + Testing。统一应用于页面、邮件和 HTML 报告；Teams 使用原生语义色，具体色调受客户端控制。Sprint / Epic 组内三条指标缩小间距，组间保留分隔。
 
-### v6.12.7：Teams Kanban 紧凑卡片
+### v6.12.8：Teams Kanban 紧凑卡片
 
 Teams 指标改为固定标签列、8px 细条形和独立的固定数值列，短条及零值不会挤压数字。使用包内嵌入的 PNG 色条，不需外部图片托管，保持 Open 深蓝、Dev 红、Test 黄。精简顶部时间说明，完整统计口径收进“统计说明”按钮。各指标仍打开对应 Jira 集合；Jira+ 独立扩展不变。已通过 Adaptive Cards SDK 的结构验证和渲染检查；实际 Teams 字体、间距可能受客户端影响，未发送真实通知。
+
+### v6.12.8：参考图黑白灰与亮黄主题
+
+从参考图片提取亮黄 `#F4F00D`，搭配近黑 `#171717`、浅灰 `#E4E4E2`、暖白 `#FAF9F6`。Dev / In Progress 使用亮黄色，其余工作流状态使用黑白灰层次。应用于统一界面、Kanban、邮件、独立报告及 Teams 嵌入图表；原生 Teams 文字和页面背景仍适配客户端主题。COE 预警/超期含义继续以文字表达，统计逻辑与通知路由不变。Jira+ 的冻结版本、安装包和配置均未修改。
+
+主题编译位于 `scripts/visual_theme.py`，只转换颜色字面量，上游原始模板不变。新报告需要重新导出，已有邮件附件不会自动改变颜色。
