@@ -1,6 +1,12 @@
-# Jira Monitor v6.12.9
+# Jira Monitor v6.12.10
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
+
+## v6.12.10：可配置配色与 Sprint 饼图
+
+在 Kanban 顶部点击“配色”，或 Configuration 中点击“Kanban 配色”，设置 DEV、TEST、OTHER1、OTHER2 四个颜色码（#RRGGBB）或使用取色器。保存后立即更新，无需重新查询；配置保存在当前浏览器。DEV 对应 In Progress，TEST 对应 Ready For Test、Testing、Completed；前置状态使用 OTHER1，后续及其他状态使用 OTHER2。新生成的邮件、Teams 图表和 HTML 报告沿用保存的颜色，已有附件保持原快照。
+
+Kanban 的 Sprint 每行展示两个饼图，窄屏自动单列；Open、Dev、Test、其他各自占该 Sprint 全部 Story 的比例，点击色块或图例可打开准确明细。百分比保留一位小数，可能存在舍入差异。HTML 附件同步饼图；Teams 使用饼图图片并以可点击图例穿透，邮件正文使用兼容的比例条。Epic 保持纵向条形，独立 COE、Sprint、Epic 分析逻辑和 Jira+ 不变。
 
 ## v6.12.9 配色更新
 
