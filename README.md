@@ -1,6 +1,14 @@
-# Jira Monitor v6.12.11
+# Jira Monitor v6.12.12
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
+
+## v6.12.12：Kanban 日 / 周环比与状态底色图例
+
+先在 Sprint 或 Epic 菜单完成分析，再打开 Kanban → 环比，选择 Sprint / Epic、昨天 / 今天或上周 / 本周。直接复用对应扫描保存的完整状态历史、查询、分组和状态筛选，在本地按所选维度重新计算；不会额外调用 Jira。比较终点固定为来源扫描时间，切换维度不会冒充实时刷新。每个状态展示两侧数量、增减及环比，点击数字可查看含 Assignee 的工单明细。无结果或历史不完整时明确提示，不用当前状态推断历史。
+
+周环比沿用原口径：上周日终 → 本周截至扫描时，不是两周新增量对比。每个页面保留最近一次成功的 Sprint / Epic 扫描，刷新后需重新扫描。环比 Tab 不展示当前快照的合并推送按钮，避免误推不对应的数据。
+
+Kanban 的图例改为状态颜色直接填充底色，移除额外圆点与侧边色条；新生成的 HTML 报告和邮件状态图例同步更新。
 
 ## v6.12.11：Kanban 合并推送
 
