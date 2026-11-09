@@ -1,5 +1,6 @@
 // Self-contained snapshot: no Jira API, authentication tokens, or external assets.
 function buildInteractiveReport(model){
+  if(model.comparisonChart)model={...model,comparisonColors:model.comparisonColors||(typeof kanbanPalette==='function'?kanbanPalette():{DEV:'#fa3f21',TEST:'#d3ff27'})};
   const plotter=model.comparisonChart?(typeof comparisonChartMarkup==='function'?comparisonChartMarkup:require('./comparison-charts.js').comparisonChartMarkup):null;const charts=plotter?'<div id="comparison-plots">'+plotter(model)+'</div>':'';
   const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · Sprint 报告</title><style>

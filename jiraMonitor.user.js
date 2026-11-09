@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.12.13
+// @version      6.12.14
 // @description  COE、Sprint、Epic 分析及 Kanban 可视化；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -48,7 +48,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.12.13',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.12.14',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),kanbanTab=el('button','▦  Kanban',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';kanbanTab.id='nav-kanban';
@@ -361,11 +361,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.12.13 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.12.14 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.12.13 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.12.14 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -1355,7 +1355,7 @@ function initTimeout(detailOnly){
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.12.13 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.12.14 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1690,6 +1690,7 @@ initTimeout();initTimeout(true);
   }
 // Self-contained snapshot: no Jira API, authentication tokens, or external assets.
 function buildInteractiveReport(model){
+  if(model.comparisonChart)model={...model,comparisonColors:model.comparisonColors||(typeof kanbanPalette==='function'?kanbanPalette():{DEV:'#fa3f21',TEST:'#d3ff27'})};
   const plotter=model.comparisonChart?(typeof comparisonChartMarkup==='function'?comparisonChartMarkup:require('./comparison-charts.js').comparisonChartMarkup):null;const charts=plotter?'<div id="comparison-plots">'+plotter(model)+'</div>':'';
   const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · Sprint 报告</title><style>
@@ -1730,6 +1731,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     const issues=reportIssues,ids=[...reportIds],statuses=reportStatuses&&[...reportStatuses],sourceField=field,now=reportNow,meta=reportMeta,url=reportJiraUrl;
     hub.analysisSnapshots??={};hub.analysisSnapshots['sprint-analysis']=mode=>{const period=comparisonPeriod(now,mode),source=selectStatusGroups(aggregate(issues,sourceField,ids,period.cutoff,now),statuses);return {...reportModel(source),meta,jiraUrl:url,period,generatedAt:new Date(now).toISOString()};};
     hub.analysisSnapshots['sprint-analysis'].file=mode=>({name:'Jira-Monitor-sprint-analysis-'+mode+'.html',html:buildInteractiveReport({...hub.analysisSnapshots['sprint-analysis'](mode),comparisonChart:true})});
+    hub.analysisSnapshots['sprint-analysis'].refresh=async mode=>{if(busy||teamsSending)throw Error('Sprint 正在分析或发送，请稍后重试');let failure;await guard(async()=>{try{$('period').value=mode;await run();}catch(error){failure=error;throw error;}});if(failure)throw failure;};
     dispatchEvent(new Event('jira-monitor-analysis-snapshot'));
   }
 
@@ -2217,6 +2219,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
   }
 // Self-contained snapshot: no Jira API, authentication tokens, or external assets.
 function buildInteractiveReport(model){
+  if(model.comparisonChart)model={...model,comparisonColors:model.comparisonColors||(typeof kanbanPalette==='function'?kanbanPalette():{DEV:'#fa3f21',TEST:'#d3ff27'})};
   const plotter=model.comparisonChart?(typeof comparisonChartMarkup==='function'?comparisonChartMarkup:require('./comparison-charts.js').comparisonChartMarkup):null;const charts=plotter?'<div id="comparison-plots">'+plotter(model)+'</div>':'';
   const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · Epic 报告</title><style>
@@ -2257,6 +2260,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     const issues=reportIssues,ids=[...reportIds],statuses=reportStatuses&&[...reportStatuses],sourceField=field,now=reportNow,meta=reportMeta,url=reportJiraUrl;
     hub.analysisSnapshots??={};hub.analysisSnapshots['epic-analysis']=mode=>{const period=comparisonPeriod(now,mode),source=selectStatusGroups(aggregate(issues,sourceField,ids,period.cutoff,now),statuses);return {...reportModel(source),meta,jiraUrl:url,period,generatedAt:new Date(now).toISOString()};};
     hub.analysisSnapshots['epic-analysis'].file=mode=>({name:'Jira-Monitor-epic-analysis-'+mode+'.html',html:buildInteractiveReport({...hub.analysisSnapshots['epic-analysis'](mode),comparisonChart:true})});
+    hub.analysisSnapshots['epic-analysis'].refresh=async mode=>{if(busy||teamsSending)throw Error('Epic 正在分析或发送，请稍后重试');let failure;await guard(async()=>{try{$('period').value=mode;await run();}catch(error){failure=error;throw error;}});if(failure)throw failure;};
     dispatchEvent(new Event('jira-monitor-analysis-snapshot'));
   }
 
@@ -2522,16 +2526,15 @@ function createKanbanNotifications({hub,core,view,el,getSnapshot}){
  addEventListener('jira-monitor-project-config',refresh);refresh();return {refresh};
 }
 
-// The same table-based plot works in the panel and in HTML email without scripts or remote images.
+// Compact status rows with a shared scale; inline tables also work in mail.
 function comparisonChartMarkup(model){
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const short=model.period.rate==='周环比'?['上周','本周']:['昨日','今日'];let html='';
- for(let g=0;g<model.groups.length;g++){const group=model.groups[g],rows=group.rows.map((r,index)=>({...r,index})).filter(r=>!r.total&&(r.before.length||r.after.length));if(!rows.length)continue;const max=Math.max(1,...rows.flatMap(r=>[r.before.length,r.after.length]));html+='<section class="cmp-chart" style="padding:16px;margin:14px 0;background:#fff;border:1px solid #dfe6f2;border-radius:10px"><h3 style="font:700 16px Arial,sans-serif;color:#24334d;margin:0 0 12px">'+esc(group.name)+'</h3><p style="font:12px Arial,sans-serif;color:#64748b">蓝：'+esc(model.period.before)+'　黄：'+esc(model.period.after)+'　· 同组统一刻度 0–'+max+'</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse">';
-  for(let start=0;start<rows.length;start+=3){html+='<tr>';for(const row of rows.slice(start,start+3)){html+='<td width="33.33%" valign="top" style="padding:12px 5px;vertical-align:top"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-collapse:collapse"><tr>';
-    for(let j=0;j<2;j++){const side=j?'after':'before',keys=row[side],n=keys.length,h=Math.round(n/max*150),color=j?'#ffc325':'#5b9bd5',url=new URL(model.jiraUrl),query=keys.length?'key in ('+keys.join(',')+')':'created > now() AND created < now()';if(!/^https?:$/.test(url.protocol))throw Error('Jira URL 无效');url.pathname='/issues/';url.search=new URLSearchParams({jql:query});url.hash='';const label=esc(row.name+' · '+model.period[side]+' · '+n+' 条');html+='<td height="178" valign="bottom" align="center" style="height:178px;vertical-align:bottom;padding:0 2px;border-bottom:1px solid #dae2ed"><a data-cmp-group="'+g+'" data-cmp-row="'+row.index+'" data-cmp-side="'+side+'" href="'+esc(url.href)+'" aria-label="'+label+'" title="'+label+'" style="display:block;color:#172b4d;text-decoration:none;font:700 13px Arial,sans-serif">'+(h<24?'<span style="display:block;line-height:22px">'+n+'</span>':'')+(h?'<span class="cmp-bar" style="display:block;height:'+h+'px;line-height:'+h+'px;background:'+color+';text-align:center">'+(h>=24?n:'&nbsp;')+'</span>':'')+'</a></td>';}
-    const a=row.before.length,b=row.after.length,d=b-a;html+='</tr><tr><td align="center" style="font:11px Arial,sans-serif;padding:6px 0;color:#64748b">'+short[0]+'</td><td align="center" style="font:11px Arial,sans-serif;padding:6px 0;color:#64748b">'+short[1]+'</td></tr></table><div style="font:700 12px Arial,sans-serif;text-align:center;overflow-wrap:anywhere;color:#24334d">'+esc(row.name)+'</div><div style="font:12px Arial,sans-serif;text-align:center;margin-top:6px;color:'+(d>0?'#d13438':d<0?'#0052cc':'#64748b')+'">'+(d>0?'+':'')+d+' · '+(a?((b-a)/a*100).toFixed(1)+'%':b?'新增':'—')+'</div></td>';}
-   for(let i=rows.slice(start,start+3).length;i<3;i++)html+='<td width="33.33%"></td>';html+='</tr>';
-  }html+='</table></section>';
+ const palette=model.comparisonColors||(typeof kanbanPalette==='function'?kanbanPalette():{DEV:'#fa3f21',TEST:'#d3ff27'}),colors=[palette.DEV,palette.TEST].map(c=>/^#[0-9a-f]{6}$/i.test(c||'')?c:'#777777');let html='';
+ for(let g=0;g<model.groups.length;g++){const group=model.groups[g],rows=group.rows.map((r,index)=>({...r,index})).filter(r=>!r.total&&(r.before.length||r.after.length)).sort((a,b)=>b.after.length-a.after.length||b.before.length-a.before.length||a.name.localeCompare(b.name));if(!rows.length)continue;const max=Math.max(1,...rows.flatMap(r=>[r.before.length,r.after.length]));html+='<section class="cmp-chart" style="padding:16px;margin:14px 0;background:#fff;border:1px solid #dfe6f2;border-radius:10px"><h3 style="font:700 16px Arial,sans-serif;color:#24334d;margin:0 0 12px">'+esc(group.name)+'</h3><p style="font:12px Arial,sans-serif;color:#64748b">按当前期数量降序 · 同组统一刻度 0–'+max+'</p>';
+  for(const row of rows){const a=row.before.length,b=row.after.length,d=b-a;html+='<div class="cmp-status" style="padding:12px 0;border-top:1px solid #edf1f7"><div style="font:700 13px Arial,sans-serif;color:#24334d;margin-bottom:6px">'+esc(row.name)+' <span style="font-weight:400;color:'+(d>0?'#d13438':d<0?'#0052cc':'#64748b')+'">'+(d>0?'+':'')+d+' · '+(a?((b-a)/a*100).toFixed(1)+'%':b?'新增':'—')+'</span></div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed">';
+   for(let j=0;j<2;j++){const side=j?'after':'before',keys=row[side],n=keys.length,width=(n/max*100).toFixed(1),url=new URL(model.jiraUrl);if(!/^https?:$/.test(url.protocol))throw Error('Jira URL 无效');url.pathname='/issues/';url.search=new URLSearchParams({jql:keys.length?'key in ('+keys.join(',')+')':'created > now() AND created < now()'});url.hash='';const label=esc(row.name+' · '+model.period[side]+' · '+n+' 条');html+='<tr><td width="110" style="font:11px Arial,sans-serif;color:#64748b;padding:5px 8px 5px 0;overflow-wrap:anywhere">'+esc(model.period[side])+'</td><td><a data-cmp-group="'+g+'" data-cmp-row="'+row.index+'" data-cmp-side="'+side+'" href="'+esc(url.href)+'" aria-label="'+label+'" title="'+label+'" style="display:block;color:#24334d;text-decoration:none"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed"><tr><td style="padding:3px 0"><span style="display:block;height:12px;background:#edf1f7;border-radius:3px">'+(n?'<span class="cmp-bar" style="display:block;height:12px;width:'+width+'%;background:'+colors[j]+';border-radius:3px"></span>':'')+'</span></td><td width="36" align="right" style="font:700 12px Arial,sans-serif">'+n+'</td></tr></table></a></td></tr>';}
+   html+='</table></div>';
+  }html+='</section>';
  }return html||'<p>没有符合所选状态的工单。</p>';
 }
 function buildComparisonEmail(model){return '<div style="background:#f3f6fc;padding:20px 10px;font:14px Arial,sans-serif;color:#24334d"><div style="max-width:760px;margin:auto"><h2>'+({ 'sprint-analysis':'Sprint','epic-analysis':'Epic'}[model.analysisType]||'Kanban')+' · 状态环比</h2><p>'+String(model.period.description).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))+'</p>'+comparisonChartMarkup(model)+'<p style="font-size:12px;color:#64748b">点击柱子或数字打开对应 Jira 集合。HTML 附件可离线查看工单明细。扫描时间：'+new Date(model.generatedAt).toISOString()+'</p></div></div>';}
@@ -2542,15 +2545,16 @@ function createKanbanComparison({hub,el,panel}){
  const tools=el('div',null,panel);tools.className='kb-toolbar';
  const select=(label,id,values)=>{const box=el('label',label+' ',tools),s=el('select',null,box);s.id=id;for(const [value,name] of values){const o=el('option',name,s);o.value=value;}return s;};
  const type=select('分析','kb-compare-type',[['sprint','Sprint'],['epic','Epic']]),period=select('环比维度','kb-compare-period',[['day','昨天 / 今天'],['week','上周 / 本周']]);
- const refresh=el('button','使用已扫描结果',tools);refresh.id='kb-compare-refresh';const result=el('div',null,panel);result.id='kb-compare-results';
- function render(){result.replaceChildren();const read=hub.analysisSnapshots?.[type.value+'-analysis'];if(!read){el('p','暂无 '+type.value+' 历史分析结果。请先在对应菜单完成扫描，再返回此处；当前状态快照不能计算环比。',result);el('button','打开 '+type.value+' 分析',result).onclick=()=>hub.show(type.value);return;}
-  try{const model=read(period.value);el('p','来源扫描：'+new Date(model.generatedAt).toLocaleString('zh-CN',{hour12:false})+' · '+model.period.description+'；复用原分析的查询、分组及状态筛选，不重新扫描。',result);const info=el('details',null,result);el('summary','来源查询与统计口径',info);el('p',model.meta,info);el('button','预览邮件图表',result).onclick=()=>hub.previewEmail({enabled:true,to:'仅预览，不发送',subject:'Kanban · 环比图表预览',bodyHtml:buildComparisonEmail(model)});el('button','导出交互图表',result).onclick=()=>hub.downloadFile(read.file(period.value));let shown=0;
-   for(const group of model.groups){const rows=group.rows.filter(r=>r.before.length||r.after.length);if(!rows.length)continue;shown++;const card=el('section',null,result);card.className='kb-comparison-group';const chart=el('div',null,card),plotModel={...model,groups:[group]};chart.innerHTML=comparisonChartMarkup(plotModel);for(const a of chart.querySelectorAll('[data-cmp-row]'))a.onclick=e=>{e.preventDefault();const row=group.rows[Number(a.dataset.cmpRow)],side=a.dataset.cmpSide,keys=new Set(row[side]);hub.showIssueDetails(group.name+' · '+row.name+' · '+model.period[side],group.issues.filter(i=>keys.has(i.key)).map(i=>({issue:{key:i.key,fields:{summary:i.summary,assignee:{displayName:i.assignee}}},before:i.before?{name:i.before}:null,after:i.after?{name:i.after}:null})),model.period);};const numbers=el('details',null,card);el('summary','查看数量与环比表格',numbers);const table=el('table',null,numbers);table.style.cssText='width:100%;border-collapse:collapse;font-size:13px';const head=el('tr',null,el('thead',null,table));for(const name of ['Status',model.period.before,model.period.after,'增减',model.period.rate])el('th',name,head).style.cssText='padding:10px;text-align:left;background:#f3f6fc';const body=el('tbody',null,table);
+ const refresh=el('button','重新扫描并更新',tools);refresh.id='kb-compare-refresh';const scanStatus=el('p','',panel);scanStatus.id='kb-compare-scan-status';scanStatus.setAttribute('role','status');let updating=false,failed=false;const result=el('div',null,panel);result.id='kb-compare-results';
+ function render(){if(updating||failed)return;result.replaceChildren();const read=hub.analysisSnapshots?.[type.value+'-analysis'];if(!read){el('p','暂无 '+type.value+' 历史分析结果。请先在对应菜单完成扫描，再返回此处；当前状态快照不能计算环比。',result);el('button','打开 '+type.value+' 分析',result).onclick=()=>hub.show(type.value);return;}
+  try{const model=read(period.value);el('p','来源扫描：'+new Date(model.generatedAt).toLocaleString('zh-CN',{hour12:false})+' · '+model.period.description+'；切换分析或维度将重新扫描并更新。',result);const info=el('details',null,result);el('summary','来源查询与统计口径',info);el('p',model.meta,info);el('button','预览邮件图表',result).onclick=()=>hub.previewEmail({enabled:true,to:'仅预览，不发送',subject:'Kanban · 环比图表预览',bodyHtml:buildComparisonEmail(model)});el('button','导出交互图表',result).onclick=()=>hub.downloadFile(read.file(period.value));let shown=0;
+   for(const group of model.groups){const rows=group.rows.filter(r=>r.before.length||r.after.length).sort((a,b)=>Number(!!a.total)-Number(!!b.total)||b.after.length-a.after.length||b.before.length-a.before.length||a.name.localeCompare(b.name));if(!rows.length)continue;shown++;const card=el('section',null,result);card.className='kb-comparison-group';const chart=el('div',null,card),plotModel={...model,groups:[group]};chart.innerHTML=comparisonChartMarkup(plotModel);for(const a of chart.querySelectorAll('[data-cmp-row]'))a.onclick=e=>{e.preventDefault();const row=group.rows[Number(a.dataset.cmpRow)],side=a.dataset.cmpSide,keys=new Set(row[side]);hub.showIssueDetails(group.name+' · '+row.name+' · '+model.period[side],group.issues.filter(i=>keys.has(i.key)).map(i=>({issue:{key:i.key,fields:{summary:i.summary,assignee:{displayName:i.assignee}}},before:i.before?{name:i.before}:null,after:i.after?{name:i.after}:null})),model.period);};const numbers=el('details',null,card);el('summary','查看数量与环比表格',numbers);const table=el('table',null,numbers);table.style.cssText='width:100%;border-collapse:collapse;font-size:13px';const head=el('tr',null,el('thead',null,table));for(const name of ['Status',model.period.before,model.period.after,'增减',model.period.rate])el('th',name,head).style.cssText='padding:10px;text-align:left;background:#f3f6fc';const body=el('tbody',null,table);
     for(const row of rows){const tr=el('tr',null,body),name=el('td',null,tr);for(const td of [name])td.style.padding='9px';const badge=el('span',row.name,name);if(!row.total){const c=kanbanStatusColor(row.name);badge.style.cssText='background:'+c+';color:'+kanbanInk(c)+';padding:4px 8px;border-radius:5px;display:inline-block';}else tr.style.fontWeight='700';for(const side of ['before','after']){const td=el('td',null,tr),b=el('button',String(row[side].length),td);b.style.cssText='border:0;background:none;text-decoration:underline';b.onclick=()=>{const keys=new Set(row[side]);hub.showIssueDetails(group.name+' · '+row.name+' · '+model.period[side],group.issues.filter(i=>keys.has(i.key)).map(i=>({issue:{key:i.key,fields:{summary:i.summary,assignee:{displayName:i.assignee}}},before:i.before?{name:i.before}:null,after:i.after?{name:i.after}:null})),model.period);};}const a=row.before.length,b=row.after.length,d=b-a;el('td',(d>0?'+':'')+d,tr).style.color=d>0?'#d13438':d<0?'#0052cc':'inherit';el('td',a?((b-a)/a*100).toFixed(1)+'%':b?'新增':'—',tr);}
    }if(!shown)el('p','该扫描结果没有符合所选状态的工单。',result);
   }catch(error){el('p','无法读取扫描结果：'+error.message,result);}
  }
- type.onchange=period.onchange=refresh.onclick=render;addEventListener('jira-monitor-analysis-snapshot',render);return {render};
+ async function rescan(){if(updating)return;failed=false;scanStatus.textContent='';const read=hub.analysisSnapshots?.[type.value+'-analysis'];if(!read?.refresh){render();return;}updating=true;type.disabled=period.disabled=refresh.disabled=true;result.replaceChildren();scanStatus.textContent='扫描中… 正在获取 '+type.value+' 的最新工单和状态历史';try{await read.refresh(period.value);scanStatus.textContent='已更新：'+new Date().toLocaleString('zh-CN',{hour12:false});}catch(error){failed=true;scanStatus.textContent='更新失败：'+error.message+'；未展示旧图表，请重试';return;}finally{updating=false;type.disabled=period.disabled=refresh.disabled=false;}render();}
+ type.onchange=period.onchange=refresh.onclick=rescan;addEventListener('jira-monitor-analysis-snapshot',()=>{failed=false;render();});return {render};
 }
 
 // Kanban owns its requests, snapshot and controls; existing analysis modules are never invoked.
