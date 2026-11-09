@@ -1,6 +1,12 @@
-# Jira Monitor v6.12.10
+# Jira Monitor v6.12.11
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
+
+## v6.12.11：Kanban 合并推送
+
+Kanban 底部“合并推送图表”可勾选 COE、Sprint、Epic（默认全选），共用当前载入的 Story 快照，不额外请求 Jira。Sprint、Epic 保留各自的分组勾选；未打开的类型默认使用全部有效分组。清空分组时显示无有效分组说明，不暗中恢复全选。
+
+按 COE → Sprint → Epic 固定顺序，一次提交给每个项目的通知工作流。Teams 使用按序排列的独立卡片；邮件合并为一封，附一份包含所有所选图表的 HTML 交互报告。各项目继续按 Configuration 分别路由，避免混入其他项目的数据。任一 Teams 卡片超限时沿用仅邮件的提示与降级逻辑。未勾选任何图表时不发送。
 
 ## v6.12.10：可配置配色与 Sprint 饼图
 
