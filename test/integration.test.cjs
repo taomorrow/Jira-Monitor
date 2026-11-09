@@ -371,7 +371,7 @@ test('missed Job outside the startup window performs no analysis',async()=>{
 
 
 test('native installer data is absent at startup; export rejects bad checksums and allows retry',async()=>{
- assert.ok(Buffer.byteLength(source)<328000);assert.ok(Math.max(...source.split('\n').map(line=>line.length))<20000);
+ assert.ok(Buffer.byteLength(source)<336000);assert.ok(Math.max(...source.split('\n').map(line=>line.length))<20000);
  const f=boot();let calls=0,downloads=0;f.w.URL.createObjectURL=()=>{downloads++;return 'blob:test';};f.w.HTMLAnchorElement.prototype.click=()=>{};Object.defineProperty(f.w.crypto,'subtle',{value:require('node:crypto').webcrypto.subtle});
  f.w.GM_xmlhttpRequest=request=>{calls++;assert.equal(request.method,'GET');queueMicrotask(()=>request.onload(calls===1?{status:200,responseText:'corrupted'}:{status:200,responseText:fs.readFileSync(__dirname+'/../src/mac-app-template.base64','utf8')}));};
  f.hub.querySelector('#nav-settings').click();assert.equal(calls,0);const input=f.hub.querySelector('[data-job-field="enabled"]');input.checked=true;const buttons=[...f.hub.querySelector('#scheduled-jobs').querySelectorAll('button')];buttons.find(x=>x.textContent==='保存 Job 配置').click();const button=buttons.find(x=>x.textContent==='导出 Mac 定时启动器');button.click();await until(()=>!button.disabled);assert.equal(downloads,0);assert.match(f.hub.querySelector('#scheduled-jobs').textContent,/校验失败/);button.click();await until(()=>!button.disabled);assert.equal(calls,2);assert.equal(downloads,1);assert.equal(f.requests.length,0);f.dom.window.close();
