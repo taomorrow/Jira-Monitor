@@ -3,12 +3,12 @@ import hashlib
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.12.7').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析及 Kanban 可视化；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.12.9').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析及 Kanban 可视化；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      api.powerplatform.com','// @connect      api.powerplatform.com\n// @connect      raw.githubusercontent.com')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_openInTab\n// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.12.7')
+t=t[t.index('(function ()'):].replace('5.5.4','6.12.9')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -84,7 +84,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.12.7',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.12.9',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -268,6 +268,13 @@ s=s.replace("    let failure;", "    let failure,skipped=false;")
 s=s.replace("      $('attach-report').checked=job.attach;await run();", "      if(!selected().length){skipped=true;message('没有有效 Sprint（已排除 CLOSED 和未分配项），本次跳过。');return;}$('attach-report').checked=job.attach;await run();")
 s=s.replace("    if(failure)throw failure;", "    if(failure)throw failure;if(skipped)return;")
 
+
+# Scoped presentation changes; workflow and counts remain unchanged.
+t=t.replace("color:#d1242f;font-weight:700", "color:white;background:#fa3f21;padding:1px 3px;font-weight:700")
+t=t.replace("color:#b58100;font-weight:700;background:#fff7bd", "color:#181717;font-weight:700;background:#d3ff27")
+def analysis_colors(code):
+    return code.replace(".className='delta';", ".style.cssText='font-weight:700;color:'+(delta>0?'#d13438':delta<0?'#0052cc':'inherit');").replace('font-weight:700;background:#eaf1ff','font-weight:700').replace("if(j===3&&Number(v)>0)td.style.color='#d13438';", "if(j===3)td.style.color=Number(v)>0?'#d13438':Number(v)<0?'#0052cc':'inherit';")
+s=analysis_colors(s);epic=analysis_colors(epic)
 
 # Kanban is standalone: reuse only the pure current-query parser and workflow order.
 pristine=(root/'src/sprint.user.js').read_text()

@@ -1,6 +1,12 @@
-# Jira Monitor v6.12.7
+# Jira Monitor v6.12.9
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
+
+## v6.12.9 配色更新
+
+以 v6.12.7 为功能基线。Kanban 的 Dev / In Progress 使用图片采样色 Orange `#FA3F21`，Test / Completed 使用 Sun Glare `#D3FF27`，SIT 使用 Blue Violet `#5542BA`，其余阶段采用深蓝、黑灰层次。页面、邮件图表、交互报告和 Teams 图表同步更新，统计口径不变。
+
+COE 即将超期使用 Sun Glare，已超期使用 Orange。独立 Sprint / Epic 表格取消行填充，仅增量数字红色、减量数字蓝色。浮动星号使用 Jira Search 蓝色。Jira+ 插件保持不变。
 
 ## 安装与使用
 
