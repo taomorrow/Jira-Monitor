@@ -1,8 +1,12 @@
 # Jira+
 
-独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.1**。
+独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.2**。
 
-[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.1/JiraPlus-6.10.4.1.zip)
+[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.2/JiraPlus-6.10.4.2.zip)
+
+## Job 一键合并推送
+
+在 Configuration → 定时 Job 设置中，勾选“一键合并推送”，选择 COE、Sprint、EPIC 中一个或多个，再启用 Teams / 邮件并保存。会先完成扫描，再按 COE → Sprint → EPIC 合并为每项目一封邮件、一张 Teams 卡片；交互报告随邮件作为各菜单附件提供。不同项目仍按各自配置投递。合并卡片超过 Teams 限制时仅发送邮件（需要启用邮件），不会自动拆分重复发送。扫描失败则不发送本次合并结果。原有 Job 未启用合并时保持分别推送。
 
 ## Mac 安装
 

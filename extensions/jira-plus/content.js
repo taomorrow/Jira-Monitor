@@ -11,7 +11,9 @@ const GM_registerMenuCommand=(label,callback)=>menuCommands.push({label,callback
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local')for(const [key,change]of Object.entries(changes)){if(Object.hasOwn(change,'newValue'))cache[key]=change.newValue;else delete cache[key];}});
 chrome.runtime.onMessage.addListener(message=>{if(message?.type==='jiraplus:open'){document.getElementById('jira-plus-hub')?.shadowRoot?.getElementById('launcher')?.click();}});
 const GM_openInTab=async(url,options={})=>{await storageQueue;const result=await chrome.runtime.sendMessage({type:'jiraplus:tab',url:String(url),active:options.active!==false});if(!result?.ok)throw Error(result?.error||'打开标签失败');return result;};
+let jiraPlusPending=null,jiraPlusMenu=null;
 const GM_xmlhttpRequest=options=>{
+ if(typeof jiraPlusPending!=='undefined'&&jiraPlusPending&&options.method==='POST'){try{const payload=JSON.parse(options.data);if(payload.reportType){jiraPlusPending.push({url:options.url,payload,menu:jiraPlusMenu});queueMicrotask(()=>options.onload?.({status:202,responseText:'Buffered for combined Job delivery'}));return {abort(){}};}}catch(error){queueMicrotask(()=>options.onerror?.({error:error.message}));return {abort(){}};}}
  const id=crypto.randomUUID();let settled=false;
  const finish=(callback,value)=>{if(settled)return;settled=true;callback?.(value);};
  chrome.runtime.sendMessage({type:'jiraplus:http',id,url:options.url,method:options.method||'GET',headers:options.headers||{},data:options.data,timeout:options.timeout||30000}).then(result=>{if(result?.ok)finish(options.onload,result.response);else finish(result?.timeout?options.ontimeout:options.onerror,{error:result?.error||'请求失败'});}).catch(error=>finish(options.onerror,{error:error.message}));
@@ -45,7 +47,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-plus-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira+');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira+',header);el('span','v6.10.4',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira+',header);el('span','v6.10.4.2',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira+');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';
@@ -171,6 +173,20 @@ async function macAppArchive(installer){
 // Scheduled jobs contain references and preferences only; never credentials.
 const JOB_STORE='jira-plus-jobs-v1',JOB_LOG='jira-plus-job-runs-v1';
 hub.jobRunners={};
+// Bundle only explicitly selected Job notifications; manual menu sends stay unchanged.
+function jiraPlusMergeDeliveries(entries,job){
+ const grouped=new Map(),order=['coe','sprint','epic'];
+ for(const entry of [...entries].sort((a,b)=>order.indexOf(a.menu)-order.indexOf(b.menu))){const p=entry.payload,key=String(p.projectKey||'');if(!key)throw Error('合并通知缺少项目 Key，未发送');const id=JSON.stringify([key,entry.url]);if(!grouped.has(id))grouped.set(id,[]);grouped.get(id).push(entry);}
+ return [...grouped.values()].map(items=>{const first=items[0],names=items.map(x=>({coe:'COE',sprint:'Sprint',epic:'Epic'})[x.menu]),title=first.payload.projectKey+' · '+names.join(' / '),emails=items.map(x=>x.payload.email).filter(e=>e?.enabled),recipients=[...new Set(emails.flatMap(e=>e.recipients||String(e.to||'').split(';')).filter(Boolean))];
+ if(job.email&&!recipients.length)throw Error(title+' 未配置邮件收件人');
+ const cards=items.flatMap(x=>x.payload.attachments||[]),body=cards.flatMap((c,i)=>[{type:'TextBlock',text:names[i]||'扫描结果',weight:'Bolder',size:'Medium',separator:true,wrap:true},...(c.content?.body||[]),...(c.content?.actions?.length?[{type:'ActionSet',actions:c.content.actions}]:[])]),attachment={contentType:'application/vnd.microsoft.card.adaptive',content:{$schema:'http://adaptivecards.io/schemas/adaptive-card.json',type:'AdaptiveCard',version:'1.2',msteams:{width:'Full'},body:[{type:'TextBlock',text:title,weight:'Bolder',size:'Large',wrap:true},...body]}};
+ const oversized=new TextEncoder().encode(JSON.stringify(attachment)).length>26*1024,missing=items.some(x=>x.payload.teams?.enabled===false||!(x.payload.attachments||[]).length);if(job.teams&&(oversized||missing)&&!job.email)throw Error('合并结果超过 Teams 大小限制或包含仅邮件结果，请启用邮件后重试');
+ const teams=job.teams&&!oversized&&!missing,email=job.email?{enabled:true,recipients,to:recipients.join(';'),subject:'[Jira+] '+title,bodyText:emails.map((e,i)=>names[i]+'\n'+(e.bodyText||'')).join('\n\n'),bodyHtml:emails.map(e=>'<div style="margin-bottom:24px">'+(e.bodyHtml||'')+'</div>').join(''),attachments:job.attach?emails.flatMap(e=>e.attachments||[]):[]}:{enabled:false};
+ return {url:first.url,payload:{type:'message',reportType:'job-summary',projectKey:first.payload.projectKey,text:title+'\n'+items.map(x=>x.payload.text||x.payload.summary||'扫描完成').join('\n\n'),summary:title,menus:items.map(x=>x.menu),teams:{enabled:teams},deliveryMode:teams?'teams-and-email':'email-only',attachments:teams?[attachment]:[],email},emailOnly:job.teams&&!teams};
+ });
+}
+async function jiraPlusFlush(job){const entries=jiraPlusPending||[];jiraPlusPending=null;const deliveries=jiraPlusMergeDeliveries(entries,job);for(const d of deliveries){const current=hub.target(d.payload.projectKey+'-1');if(!current||current.webhook!==d.url||(job.email&&[...(current.recipients||[])].sort().join(';')!==[...d.payload.email.recipients].sort().join(';')))throw Error(d.payload.projectKey+' 通知已停用，未发送');await new Promise((resolve,reject)=>GM_xmlhttpRequest({method:'POST',url:d.url,headers:{'Content-Type':'application/json'},data:JSON.stringify(d.payload),timeout:30000,onload:r=>r.status>=200&&r.status<300?resolve():reject(Error('合并通知失败 HTTP '+r.status+'；未自动重试')),onerror:()=>reject(Error('合并通知网络失败，结果未知；未自动重试')),ontimeout:()=>reject(Error('合并通知超时，结果未知；未自动重试'))}));}return deliveries.some(d=>d.emailOnly)?'所选数量超过 Teams 大小限制，所选数据只通过邮件发送':deliveries.length?'已按项目合并提交所选菜单；最终投递请查看工作流':'扫描完成，没有可推送的数据';}
+
 const jobDefaultUrl='https://jira.xpaas.lenovo.com/issues/?filter=180929';
 function jobList(){return GM_getValue(JOB_STORE,[]);}
 function validJob(value){
@@ -179,6 +195,7 @@ function validJob(value){
  j.name=String(j.name||'未命名 Job').slice(0,80);j.times=[...new Set(String(Array.isArray(j.times)?j.times.join(','):j.times).split(/[,，\s]+/).filter(Boolean))].sort();
  if(!j.times.length||j.times.some(t=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)))throw Error('时间请填写 09:00,21:00，可填写多个时间。');
  j.menus=[...new Set(j.menus||[])];if(!j.menus.length||j.menus.some(x=>!['coe','sprint','epic'].includes(x)))throw Error('请至少选择一个执行菜单。');
+ j.combine=j.combine===true;j.pushMenus=[...new Set(j.pushMenus||j.menus)];if(j.combine&&(!j.pushMenus.length||j.pushMenus.some(x=>!['coe','sprint','epic'].includes(x))))throw Error('请至少选择一个合并推送菜单。');if(j.combine)j.menus=[...new Set([...j.menus,...j.pushMenus])];
  j.period=j.period==='week'?'week':'day';j.days=j.days==='weekdays'?'weekdays':'daily';j.projects=String(j.projects||'').trim().toUpperCase();if(j.projects&&!/^[A-Z][A-Z0-9_]*(\/[A-Z][A-Z0-9_]*)*$/.test(j.projects))throw Error('推送项目用 / 分隔，例如 CSP/OSPIT；留空使用全部已启用项目。');
  for(const key of ['enabled','teams','email','attach'])j[key]=j[key]===true;return j;
 }
@@ -206,9 +223,11 @@ async function executeJob(id,manual=false){
   const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
   jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;
-  try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);}
-   jobLog(id,{status:'completed',message:'已完成；通知提交不代表最终送达，请查看工作流。'});
-  }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;}
+  if(job.combine)jiraPlusPending=[];
+  try{for(const menu of ['coe','sprint','epic'].filter(m=>job.menus.includes(m))){jiraPlusMenu=menu;if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job.combine&&!job.pushMenus.includes(menu)?{...job,teams:false,email:false}:job);}
+   const combinedMessage=job.combine?await jiraPlusFlush(job):null;
+   jobLog(id,{status:'completed',message:combinedMessage||'已完成；通知提交不代表最终送达，请查看工作流。'});
+  }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;jiraPlusPending=null;jiraPlusMenu=null;}
  };
  if(!navigator.locks?.request)throw Error('浏览器不支持 Job 防重复锁，请使用新版 Chrome。');
  // A single origin-wide lock serializes different jobs and duplicate tabs.
@@ -240,15 +259,15 @@ hub.renderJobs=()=>{
  const entries=[],list=el('div',null,panel),status=el('p',null,panel);status.setAttribute('role','status');
  const addJob=value=>{
   const card=el('fieldset',null,list);card.style.cssText='border:1px solid #dbe3f0;border-radius:10px;margin:12px 0;padding:14px;display:grid;gap:8px';
-  const j={id:crypto.randomUUID(),name:'Jira 每日分析',url:jobDefaultUrl,times:['09:00','21:00'],menus:['coe'],period:'day',days:'daily',enabled:false,teams:false,email:false,attach:true,projects:'',...value};const controls={};
+  const j={id:crypto.randomUUID(),name:'Jira 每日分析',url:jobDefaultUrl,times:['09:00','21:00'],menus:['coe'],period:'day',days:'daily',enabled:false,teams:false,email:false,attach:true,projects:'',combine:true,...value};const controls={};
   const field=(key,title,type='text')=>{const label=el('label',title+' ',card),input=el('input',null,label);input.type=type;if(type==='checkbox')input.checked=j[key];else input.value=Array.isArray(j[key])?j[key].join(','):j[key];input.dataset.jobField=key;controls[key]=input;return input;};
   field('enabled','启用 Job','checkbox');field('name','名称');field('url','Jira 查询页面').style.width='100%';field('times','每日时间（多个用逗号分隔）');
   const select=(key,title,options)=>{const label=el('label',title+' ',card),input=el('select',null,label);for(const [v,name] of options){const o=el('option',name,input);o.value=v;}input.value=j[key];controls[key]=input;};
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
-  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
+  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');field('combine','一键合并推送（所选结果合并为一封邮件 / 一张 Teams 卡片）','checkbox');const push=el('div','推送菜单（可单选或多选）：',card),pushChecks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','EPIC']]){const label=el('label',name+' ',push),check=el('input',null,label);check.type='checkbox';check.dataset.jobPush=key;check.value=key;check.checked=(j.pushMenus||j.menus).includes(key);pushChecks.push(check);}el('small','合并推送会扫描所选推送菜单，按 COE → Sprint → EPIC 发送；不同项目分别投递。',card);
   const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
-  const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
+  const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value),pushMenus:pushChecks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
  };
  const stored=jobList();(stored.length?stored:[{}]).forEach(addJob);
@@ -914,7 +933,7 @@ function initTimeout(detailOnly){
     teamsSending=true;render();
     const state=JSON.parse(JSON.stringify(source)),rules=state.rules||CONFIG.rules,groups=new Map(),outcomes=[];
     for(const item of state.results||[]){if(!hasTeamsAlert(item,rules)||!hub.jobProjectAllowed(projectKeyOf(item.key)))continue;const key=projectKeyOf(item.key);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
-    if(state.phase==='done'&&GM_getValue(EMPTY_COE,false)===true){
+    if(state.phase==='done'&&(GM_getValue(EMPTY_COE,false)===true||hub.jobDelivery?.combine)){
       for(const key of Object.keys(state.projectCounts||{}))if(hub.jobProjectAllowed(key)&&!groups.has(key))groups.set(key,[]);
     }
     try{
@@ -1761,8 +1780,8 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         if(hub.jobDelivery?.email&&!report.payload.email.enabled)throw Error(projectKey+' 未配置邮件收件人');
         hub.deliveryPayload(report.payload);
         const oversized=new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
-        const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
-        if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
+        const emailOnly=oversized&&report.payload.reportType==='epic-analysis'&&!hub.jobDelivery?.combine;
+        if(oversized&&!emailOnly&&!hub.jobDelivery?.combine)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
         if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
         report.payload.teams={enabled:!emailOnly&&hub.jobDelivery?.teams!==false};
         if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}
@@ -2279,8 +2298,8 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         if(hub.jobDelivery?.email&&!report.payload.email.enabled)throw Error(projectKey+' 未配置邮件收件人');
         hub.deliveryPayload(report.payload);
         const oversized=new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
-        const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
-        if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Epic 后重试。');
+        const emailOnly=oversized&&report.payload.reportType==='epic-analysis'&&!hub.jobDelivery?.combine;
+        if(oversized&&!emailOnly&&!hub.jobDelivery?.combine)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Epic 后重试。');
         if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
         report.payload.teams={enabled:!emailOnly&&hub.jobDelivery?.teams!==false};
         if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}

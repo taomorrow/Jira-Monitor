@@ -9,7 +9,9 @@ const GM_registerMenuCommand=(label,callback)=>menuCommands.push({label,callback
 chrome.storage.onChanged.addListener((changes,area)=>{if(area==='local')for(const [key,change]of Object.entries(changes)){if(Object.hasOwn(change,'newValue'))cache[key]=change.newValue;else delete cache[key];}});
 chrome.runtime.onMessage.addListener(message=>{if(message?.type==='jiraplus:open'){document.getElementById('jira-plus-hub')?.shadowRoot?.getElementById('launcher')?.click();}});
 const GM_openInTab=async(url,options={})=>{await storageQueue;const result=await chrome.runtime.sendMessage({type:'jiraplus:tab',url:String(url),active:options.active!==false});if(!result?.ok)throw Error(result?.error||'打开标签失败');return result;};
+let jiraPlusPending=null,jiraPlusMenu=null;
 const GM_xmlhttpRequest=options=>{
+ if(typeof jiraPlusPending!=='undefined'&&jiraPlusPending&&options.method==='POST'){try{const payload=JSON.parse(options.data);if(payload.reportType){jiraPlusPending.push({url:options.url,payload,menu:jiraPlusMenu});queueMicrotask(()=>options.onload?.({status:202,responseText:'Buffered for combined Job delivery'}));return {abort(){}};}}catch(error){queueMicrotask(()=>options.onerror?.({error:error.message}));return {abort(){}};}}
  const id=crypto.randomUUID();let settled=false;
  const finish=(callback,value)=>{if(settled)return;settled=true;callback?.(value);};
  chrome.runtime.sendMessage({type:'jiraplus:http',id,url:options.url,method:options.method||'GET',headers:options.headers||{},data:options.data,timeout:options.timeout||30000}).then(result=>{if(result?.ok)finish(options.onload,result.response);else finish(result?.timeout?options.ontimeout:options.onerror,{error:result?.error||'请求失败'});}).catch(error=>finish(options.onerror,{error:error.message}));
