@@ -1,1 +1,1 @@
-23a649d2b060b58b804e0ab2deba1e660c0e08cfb59c7fce885b6fe33dd1aedb  JiraPlus-6.10.4.3.zip
+f8d31a158eaa914c9fa58dcddddfdd5ae06e3335472ffdd074958b279e1078d1  JiraPlus-6.10.4.4.zip

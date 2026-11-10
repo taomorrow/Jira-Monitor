@@ -1,14 +1,16 @@
 # Jira+
 
-独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.3**。
+独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.4**。
 
-[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.3/JiraPlus-6.10.4.3.zip)
+[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.4/JiraPlus-6.10.4.4.zip)
+
+6.10.4.4 新增：合并推送只提交一个交互 HTML 附件，不再依赖邮件工作流保留多个附件；邮件正文同步只显示合并报告文件名。
 
 6.10.4.3 修复：COE 与 Sprint / Epic 的 Webhook 地址先统一规范化再合并；避免只发送 COE 后误报“通知已停用”。所有项目目标在首次提交前完成校验，保留 COE 的 Teams @ 提及；执行日志列出实际合并菜单。
 
 ## Job 一键合并推送
 
-在 Configuration → 定时 Job 设置中，勾选“一键合并推送”，选择 COE、Sprint、EPIC 中一个或多个，再启用 Teams / 邮件并保存。会先完成扫描，再按 COE → Sprint → EPIC 合并为每项目一封邮件、一张 Teams 卡片；交互报告随邮件作为各菜单附件提供。不同项目仍按各自配置投递。合并卡片超过 Teams 限制时仅发送邮件（需要启用邮件），不会自动拆分重复发送。扫描失败则不发送本次合并结果。原有 Job 未启用合并时保持分别推送。
+在 Configuration → 定时 Job 设置中，勾选“一键合并推送”，选择 COE、Sprint、EPIC 中一个或多个，再启用 Teams / 邮件并保存。会先完成扫描，再按 COE → Sprint → EPIC 合并为每项目一封邮件、一张 Teams 卡片；交互报告合并为一个 HTML 附件，打开后通过 COE / Sprint / Epic 标签切换，数字下钻、Assignee 和状态变化均保留。不同项目仍按各自配置投递。合并卡片超过 Teams 限制时仅发送邮件（需要启用邮件），不会自动拆分重复发送。扫描失败则不发送本次合并结果。原有 Job 未启用合并时保持分别推送。
 
 ## Mac 安装
 

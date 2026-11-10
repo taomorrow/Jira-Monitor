@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Jira+",
-  "version": "6.10.4.3",
+  "version": "6.10.4.4",
   "description": "基于 Jira Monitor 6.10.4 的独立扩展：COE、Sprint、Epic、项目通知与固定标签 Job。",
   "permissions": [
     "storage"
