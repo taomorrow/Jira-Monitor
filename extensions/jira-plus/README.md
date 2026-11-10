@@ -1,8 +1,10 @@
 # Jira+
 
-独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.2**。
+独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.3**。
 
-[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.2/JiraPlus-6.10.4.2.zip)
+[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.3/JiraPlus-6.10.4.3.zip)
+
+6.10.4.3 修复：COE 与 Sprint / Epic 的 Webhook 地址先统一规范化再合并；避免只发送 COE 后误报“通知已停用”。所有项目目标在首次提交前完成校验，保留 COE 的 Teams @ 提及；执行日志列出实际合并菜单。
 
 ## Job 一键合并推送
 
