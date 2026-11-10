@@ -1,6 +1,12 @@
-# Jira Monitor v6.12.14
+# Jira Monitor v6.12.15
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
+
+## v6.12.15：状态饼图与管理摘要
+
+- Kanban Sprint 按实际状态绘制饼图：大扇区内部显示状态和数量，小扇区使用外侧引导线显示数量和占比，白色分割线；包含仅有完成状态的有效 Sprint。
+- COE 使用完整比例堆叠条、小方块图例，展示各状态数量和占比；Sprint / COE 底部显示总 Story 和占比最高的状态，均可点击下钻。
+- 状态色由 Configuration 四个自定义色及相近色派生。HTML 交互附件同步布局；邮件采用兼容表格展示状态和摘要，Teams 保持原生卡片及点击跳转。
 
 ## v6.12.14：纵向状态环比与切换后重扫
 
