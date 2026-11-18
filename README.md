@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.15
+# Jira Monitor v6.12.16
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -7,6 +7,18 @@
 [下载 Jira+ 扩展](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.5/JiraPlus-6.10.4.5.zip)。在 Configuration → 定时 Job 设置启用“一键合并推送”，可单选或多选 COE、Sprint、EPIC；扫描完成后按该顺序合并为每项目一封邮件和一张 Teams 卡片。邮件只附一个合并 HTML 交互报告，内含 COE / Sprint / Epic 标签与原有明细下钻。不同项目继续使用各自通知配置。超过 Teams 限制时依次只保留 COE + Sprint、仅 COE；邮件及附件保留全部结果；COE 仍超限时仅发邮件；扫描失败不发送部分结果。更新后需重新加载扩展并刷新 Jira，原有未启用合并的 Job 仍分别推送。主油猴脚本不变。
 
 6.10.4.3 已修复同一 Webhook 原始写法与规范化写法导致只发送 COE 的问题，所有目标在首次发送前统一校验，日志显示实际合并的菜单。
+
+## v6.12.16：Risk 交付风险
+
+Kanban 新增 **Risk** Tab，点击“载入当前查询”复用同一份全部分页 Story 快照，读取标准 `duedate`（Jira Dates → Due），不扩大查询范围，不修改工单。点击 Assignee 查看 Due 分组，再点击数字或风险率查看 Assignee / Due / Epic / Story / 摘要 / Status 明细，支持搜索。
+
+- 有效 Story 排除 Done、DEPLOYED、Cancel / Cancelled / Canceled。未达 Completed = New、Grooming、Open、In Progress、Ready For Test、Testing；Completed、SIT、Ready For UAT、UAT、Ready For Deploy 仍在分母中。
+- 未达 Completed 率 = 未达 Completed 数 / 有效 Story 数；Assignee 汇总按工单数计算，不平均各 Due 的百分比。此指标不是延期概率。
+- 已到期风险率只计算 Due ≤ 扫描当天的有效 Story；逾期未完成只计算 Due < 当天且未达 Completed。按扫描时浏览器本地日期判断，无 Due / 日期异常、未分配 Assignee 独立展示；未知状态相关率显示 `—` 并提示覆盖情况。Due 筛选包括已逾期、今天、未来、未设置。
+- Kanban 一键推送增加可选 **Risk**，默认不勾选，按 COE → Sprint → Epic → Risk 合并为每项目一封邮件和一个离线 HTML 交互附件；Teams 另含 Risk 卡片，点击数字打开精确 Jira 集合。Teams 超限仍沿用仅邮件回退。独立附件支持三级下钻。
+- Configuration → 定时 Job 设置 → 执行菜单增加 **Risk**。Job 自动重新扫描，使用自身的 Teams / 邮件 / 交互附件 / 推送项目选项；扫描失败不发送 Risk 部分结果。原 Job 的菜单和行为保持不变。
+
+此更新只针对 Jira Monitor 油猴脚本，Jira+ 扩展不变。验证使用模拟 Jira / Webhook，不发送真实通知。
 
 ## v6.12.15：状态饼图与管理摘要
 

@@ -8,7 +8,7 @@ function validJob(value){
  const u=new URL(j.url);if(u.origin!==location.origin||u.pathname!=='/issues/'||u.username||u.password||(!u.searchParams.get('filter')&&!u.searchParams.get('jql')))throw Error('请填写当前 Jira 的 /issues/ 查询链接（filter 或 jql）。');u.hash='';j.url=u.href;
  j.name=String(j.name||'未命名 Job').slice(0,80);j.times=[...new Set(String(Array.isArray(j.times)?j.times.join(','):j.times).split(/[,，\s]+/).filter(Boolean))].sort();
  if(!j.times.length||j.times.some(t=>!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)))throw Error('时间请填写 09:00,21:00，可填写多个时间。');
- j.menus=[...new Set(j.menus||[])];if(!j.menus.length||j.menus.some(x=>!['coe','sprint','epic'].includes(x)))throw Error('请至少选择一个执行菜单。');
+ j.menus=[...new Set(j.menus||[])];if(!j.menus.length||j.menus.some(x=>!['coe','sprint','epic','risk'].includes(x)))throw Error('请至少选择一个执行菜单。');
  j.period=j.period==='week'?'week':'day';j.days=j.days==='weekdays'?'weekdays':'daily';j.projects=String(j.projects||'').trim().toUpperCase();if(j.projects&&!/^[A-Z][A-Z0-9_]*(\/[A-Z][A-Z0-9_]*)*$/.test(j.projects))throw Error('推送项目用 / 分隔，例如 CSP/OSPIT；留空使用全部已启用项目。');
  for(const key of ['enabled','teams','email','attach'])j[key]=j[key]===true;return j;
 }
@@ -36,7 +36,7 @@ async function executeJob(id,manual=false){
   const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
   jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;
-  try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);}
+  try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu==='risk'?'kanban':menu);await hub.jobRunners[menu](job);}
    jobLog(id,{status:'completed',message:'已完成；通知提交不代表最终送达，请查看工作流。'});
   }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;}
  };
@@ -75,8 +75,8 @@ hub.renderJobs=()=>{
   field('enabled','启用 Job','checkbox');field('name','名称');field('url','Jira 查询页面').style.width='100%';field('times','每日时间（多个用逗号分隔）');
   const select=(key,title,options)=>{const label=el('label',title+' ',card),input=el('select',null,label);for(const [v,name] of options){const o=el('option',name,input);o.value=v;}input.value=j[key];controls[key]=input;};
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
-  const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
-  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
+  const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic'],['risk','Risk']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
+  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
   const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
