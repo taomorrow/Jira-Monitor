@@ -36,7 +36,7 @@ async function executeJob(id,manual=false){
   const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
   jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;
-  try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu==='risk'?'kanban':menu);await hub.jobRunners[menu](job);}
+  try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);}
    jobLog(id,{status:'completed',message:'已完成；通知提交不代表最终送达，请查看工作流。'});
   }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;}
  };

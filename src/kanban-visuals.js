@@ -36,6 +36,6 @@ function buildKanbanTeamsChart(model){
  else{const max=Math.max(1,...section.rows.flatMap(r=>r.cells.slice(0,3).map(c=>c.keys.length)));for(const row of section.rows){const total=row.cells[3];body.push({type:'Container',separator:true,spacing:'Medium',items:[text(row.name,{weight:'Bolder'}),text(total.keys.length+' Stories',{size:'Small',isSubtle:true}),...row.cells.slice(0,3).map(cell=>bar(cell.label,cell,max))]});}}
  }
  body.push(text('点击条形或数字查看 Jira 明细',{size:'Small',isSubtle:true,spacing:'Medium'}));
- return {type:'AdaptiveCard',version:'1.2',msteams:{width:'Full'},body,actions:[{type:'Action.OpenUrl',title:'打开 Jira',url:model.url},{type:'Action.ShowCard',title:'统计说明',card:{type:'AdaptiveCard',body:[text(model.meta,{size:'Small'}),text('Open = Open；Dev = In Progress；Test = Ready For Test + Testing。完整交互报告见邮件 HTML 附件。',{size:'Small',spacing:'Small'})]}}]};
+ return {type:'AdaptiveCard',version:'1.2',msteams:{width:'Full'},body,actions:[{type:'Action.OpenUrl',title:'打开 Jira',url:model.url},{type:'Action.ShowCard',title:'统计说明',card:{type:'AdaptiveCard',body:[text(model.meta,{size:'Small'}),text(model.type==='risk'?'未达 Completed 率 = Completed 之前 / 有效 Story；排除 Done、DEPLOYED、Cancelled。Due 当天计入已到期、次日才算逾期。完整交互报告见邮件 HTML 附件。':'Open = Open；Dev = In Progress；Test = Ready For Test + Testing。完整交互报告见邮件 HTML 附件。',{size:'Small',spacing:'Small'})]}}]};
 }
 if(typeof module==='object'&&module.exports)module.exports={kanbanStatusColor,kanbanKeysUrl,buildKanbanEmailCharts,buildKanbanTeamsChart};
