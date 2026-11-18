@@ -1,4 +1,5 @@
 // Scheduled jobs contain references and preferences only; never credentials.
+const JOB_VERSION='6.12.19';
 const JOB_STORE='jira-monitor-jobs-v1',JOB_LOG='jira-monitor-job-runs-v1';
 hub.jobRunners={};
 const jobDefaultUrl='https://jira.xpaas.lenovo.com/issues/?filter=180929';
@@ -35,7 +36,7 @@ async function executeJob(id,manual=false){
   if(JSON.stringify(validJob(current))!==JSON.stringify(job))throw Error('等待期间 Job 配置已变化，请重新打开。');
   const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
-  jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;hub.jobRun={entries:[],projects:new Set(),completed:[],menu:null};
+  jobLog(id,{slot,version:JOB_VERSION,menus:JOB_MENUS.filter(m=>job.menus.includes(m)),startedAt:new Date().toISOString(),status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;hub.jobRun={entries:[],projects:new Set(),completed:[],menu:null};
   try{for(const menu of JOB_MENUS.filter(m=>job.menus.includes(m))){hub.jobRun.menu=menu;if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);hub.jobRun.completed.push(menu);}
    const deliveryMessage=await hub.flushJobReports(job);
    jobLog(id,{status:'completed',message:deliveryMessage+'；最终投递请查看工作流。'});
@@ -78,13 +79,15 @@ hub.renderJobs=()=>{
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic'],['risk','Risk']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
   el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。按勾选菜单 COE → Sprint → Epic → Risk 合并推送，每项目一封邮件和一个交互附件；Kanban 仅手动单独发送。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
-  const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
+  const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.version?'v'+log.version+' · ':''}${log.menus?'执行菜单 '+log.menus.map(m=>JOB_LABELS[m]||m).join(' / ')+' · ':''}${log.message}${log.version?'':'（旧记录，未记录版本与执行菜单，请重新运行核验）'}`:'尚未执行',card);
+  const savedState=el('small',null,card);savedState.dataset.jobSaved='';
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
-  el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
+  entry.refresh=()=>{try{const saved=jobList().find(x=>x.id===j.id),same=saved&&JSON.stringify(validJob(saved))===JSON.stringify(entry.read());savedState.textContent=(same?'已保存执行菜单：':'尚未保存，当前勾选：')+checks.filter(x=>x.checked).map(x=>x.parentElement.textContent.trim()).join(' / ');savedState.style.color=same?'#42526e':'#b45309';}catch{savedState.textContent='配置尚未保存或填写不完整';}};card.addEventListener('input',entry.refresh);card.addEventListener('change',entry.refresh);entry.refresh();
+  el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','保存并立即运行',card).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read()),saved=jobs.find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先勾选启用此 Job。');GM_setValue(JOB_STORE,jobs);entries.forEach(e=>e.refresh());const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
  };
  const stored=jobList();(stored.length?stored:[{}]).forEach(addJob);
  el('button','新增 Job',panel).onclick=()=>addJob({});
- el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);status.textContent='Job 已保存，固定标签页在下一次检查时读取新配置。请点击“设此标签页为调度页”，并保留该标签。';}catch(e){status.textContent=e.message;}};
+ el('button','保存 Job 配置',panel).onclick=()=>{try{const jobs=entries.filter(e=>!e.removed).map(e=>e.read());GM_setValue(JOB_STORE,jobs);entries.forEach(e=>e.refresh());status.textContent='Job 已保存，固定标签页在下一次检查时读取新配置。请点击“设此标签页为调度页”，并保留该标签。';}catch(e){status.textContent=e.message;}};
  const advanced=el('details',null,panel);el('summary','高级：旧 Mac 系统调度（固定标签方式不需要）',advanced);
  const browser=el('select',null,advanced);for(const name of ['Google Chrome','Microsoft Edge']){const o=el('option',name,browser);o.value=name;}
  const exportMac=el('button','导出 Mac 定时启动器',advanced);exportMac.onclick=async()=>{exportMac.disabled=true;status.textContent='正在下载并校验 Mac 安装器…';try{const installer=macInstaller(jobList(),browser.value);hub.downloadFile({name:'Jira-Monitor-Mac-Installer.zip',type:'application/zip',html:await macAppArchive(installer)});status.textContent='已导出。双击 ZIP 解压，保持 .app 与 Jira-Monitor-Schedule.sh 在同一文件夹，再双击 .app 点击“安装”。首次若被 macOS 拦截，可在系统设置 → 隐私与安全性中查看“仍要打开”。修改时间后重新导出安装。';}catch(e){status.textContent=e.message;}finally{exportMac.disabled=false;}};

@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.18
+# Jira Monitor v6.12.19
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -7,6 +7,14 @@
 [下载 Jira+ 扩展](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.5/JiraPlus-6.10.4.5.zip)。在 Configuration → 定时 Job 设置启用“一键合并推送”，可单选或多选 COE、Sprint、EPIC；扫描完成后按该顺序合并为每项目一封邮件和一张 Teams 卡片。邮件只附一个合并 HTML 交互报告，内含 COE / Sprint / Epic 标签与原有明细下钻。不同项目继续使用各自通知配置。超过 Teams 限制时依次只保留 COE + Sprint、仅 COE；邮件及附件保留全部结果；COE 仍超限时仅发邮件；扫描失败不发送部分结果。更新后需重新加载扩展并刷新 Jira，原有未启用合并的 Job 仍分别推送。主油猴脚本不变。
 
 6.10.4.3 已修复同一 Webhook 原始写法与规范化写法导致只发送 COE 的问题，所有目标在首次发送前统一校验，日志显示实际合并的菜单。
+
+## v6.12.19：Risk 勾选保存与执行追踪、Teams 紧凑指标
+
+Job 的“保存并立即运行”先保存当前勾选项再启动任务，避免刚勾选 Risk 却执行旧配置。配置卡片显示已保存或尚未保存的菜单；执行记录、通知载荷、合并附件记录版本与实际执行菜单，附件还显示生成时间。旧日志明确标为旧记录；扫描期间 Job 配置变化时不发送旧配置结果。定时任务仍只使用已保存配置。
+
+Risk Teams 卡片按负责人紧凑展示两行指标：已到期风险率 / 逾期未完成、有效 Story / 未达 Completed。已到期风险率严格大于 50% 的数值使用 Teams 红色语义（Attention），50% 与无法计算的 `—` 不标红。保留各指标的精确 Jira 链接与折叠统计说明；不调整风险计算口径或 Kanban 展示。
+
+更新脚本后请刷新 Jira 工作页及固定调度页，再点击“保存并立即运行”生成新附件。旧邮件附件不会随脚本更新。验证采用模拟接口，未发送真实通知。
 
 ## v6.12.18：Job 菜单与合并交互报告一致
 
