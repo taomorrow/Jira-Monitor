@@ -20,7 +20,7 @@
    const provisional=core.model(issues,options),epicKeys=[...new Set(provisional.rows.map(i=>i.epic).filter(key=>/^[A-Z][A-Z0-9_]*-\d+$/i.test(key)))];
    for(let start=0;start<epicKeys.length;start+=50){try{const keys=epicKeys.slice(start,start+50),page=await api('/rest/api/2/search?'+new URLSearchParams({jql:'key in ('+keys.join(',')+')',fields:'summary,issuetype',maxResults:'50'}));for(const i of page.issues||[])if(keys.includes(i.key)&&(/^(epic|史诗)$/i.test(i.fields?.issuetype?.name||'')||i.fields?.issuetype?.hierarchyLevel===1))options.epicNames[i.key]=i.key+' · '+(i.fields?.summary||'');}catch{/* Optional labels never expand the Story scope. */}}
    model=core.model(issues,{...options,now:new Date()});model.projects=[...new Set(issues.filter(i=>/^(story|用户故事|故事)$/i.test(i.fields?.issuetype?.name||'')&&!i.fields?.issuetype?.subtask).map(i=>i.key.split('-')[0].toUpperCase()))];
-   createRiskView(results,model);message.textContent='截至 '+model.time+' · 当前查询 '+total+' 条 · 有效 Story '+model.rows.length+' 条；点击 Assignee 弹出 Due 风险窗口。';
+   hub.noteJobScope(model.projects,new URL(model.url).searchParams.get('jql'));createRiskView(results,model);message.textContent='截至 '+model.time+' · 当前查询 '+total+' 条 · 有效 Story '+model.rows.length+' 条；点击 Assignee 弹出 Due 风险窗口。';
    return model;
   }catch(error){model=null;results.replaceChildren();message.textContent=error.message;throw error;}finally{busy=false;load.disabled=false;notifications.refresh();}
  }

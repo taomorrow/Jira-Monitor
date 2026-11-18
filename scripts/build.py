@@ -3,12 +3,12 @@ import hashlib
 root=Path(__file__).resolve().parents[1]
 t=(root/'src/timeout.user.js').read_text()
 s=(root/'src/sprint.user.js').read_text()
-header=t[:t.index('(function ()')].replace('5.5.4','6.12.17').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析及 Kanban 可视化；统一面板、按项目启用 Teams 和邮件通知')
+header=t[:t.index('(function ()')].replace('5.5.4','6.12.18').replace('// @description  详情自动分析、总览手动批量扫描；统一DEV/DCT、周五阈值、Excel和Teams通知','// @description  COE、Sprint、Epic 分析及 Kanban 可视化；统一面板、按项目启用 Teams 和邮件通知')
 header=header.replace('https://github.com/taomorrow/Jira/issues','https://github.com/taomorrow/Jira-Monitor/issues').replace('// @homepageURL  https://github.com/taomorrow/Jira','// @homepageURL  https://github.com/taomorrow/Jira-Monitor').replace('https://raw.githubusercontent.com/taomorrow/Jira/main/','https://raw.githubusercontent.com/taomorrow/Jira-Monitor/main/')
 header=header.replace('// @connect      api.powerplatform.com','// @connect      api.powerplatform.com\n// @connect      raw.githubusercontent.com')
 header=header.replace('// @connect      logic.azure.com','// @connect      logic.azure.com\n// @connect      api.powerautomate.com')
 header=header.replace('// @grant        GM_setValue','// @grant        GM_openInTab\n// @grant        GM_deleteValue\n// @grant        GM_setValue')
-t=t[t.index('(function ()'):].replace('5.5.4','6.12.17')
+t=t[t.index('(function ()'):].replace('5.5.4','6.12.18')
 t=t.replace("  if (!/^\\/(issues|browse)(\\/|$)/.test(location.pathname)&&!isDashboard()) return;",'')
 t=t.replace("function mountPanel(){document.documentElement.append(host);panel.style.display='block';host.style.visibility='visible';}","function mountPanel(){if(!host.isConnected)hub.timeout.append(host);panel.style.display='block';host.style.visibility='visible';}")
 t=t.replace("  host.style.bottom=CONFIG.panelBottomPx+'px';","  host.style.cssText='display:block;width:100%;position:relative';\n  hub.timeout.append(host);")
@@ -62,6 +62,7 @@ hub += (root/'src/coe-report.js').read_text()
 hub += (root/'src/mail-report.js').read_text()
 hub += (root/'src/analysis-details.js').read_text()
 hub += (root/'src/mac-app.js').read_text().replace('__MAC_APP_SHA256__',hashlib.sha256((root/'src/mac-app-template.base64').read_text().strip().encode()).hexdigest())
+hub += (root/'src/job-report.js').read_text()+'\n'+(root/'src/job-delivery.js').read_text()+'\n'
 hub += (root/'src/jobs.js').read_text()
 hub += (root/'src/browser-scheduler.js').read_text()
 
@@ -84,7 +85,7 @@ t=t.replace("    add('b','Jira Monitor · 配置中心');", """    add('h2','配
 t=t.replace("    (document.body||document.documentElement).append(overlay);\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("el('[data-progress]').textContent=s ?", "el('[data-progress]').textContent=s ?")
 t=t.replace("'详情页正在自动分析'", "'点击重新分析当前详情'")
-t=t.replace("make('b','Jira Monitor v6.12.17',null,panel)","make('b','超时预警',null,panel)")
+t=t.replace("make('b','Jira Monitor v6.12.18',null,panel)","make('b','超时预警',null,panel)")
 t=t.replace("    add('button','关闭').onclick=()=>overlay.remove();\n  }\n  if(!detailOnly", "  }\n  if(!detailOnly")
 t=t.replace("    epoch++;busy=false;detailRoute=key;", "    try{const latest=GM_getValue(RULE_SETTING,CONFIG.rules);validateRules(latest);CONFIG.rules=latest;}catch(error){notice(safeError(error));return;}\n    epoch++;busy=false;detailRoute=key;")
 # The alert close affordance belongs to the outer window; timeout content stays expanded.
@@ -226,6 +227,7 @@ t=t.replace('  function safeError(error){', (root/'src/dev-assignees.js').read_t
 s=s.replace("  function reportModel(", (root/'src/analysis-cache.js').read_text()+"\n  function reportModel(")
 s=s.replace('groups=calculated;renderNotifyProjects();render();', 'groups=calculated;renderNotifyProjects();render();publishKanbanComparison();')
 # Build Epic from the same analysis engine so filters, drilldowns and notification formats stay aligned.
+s=s.replace('for(const i of issues){const list=sprints(i.fields[field]);', 'hub.noteJobScope(issues,query);for(const i of issues){const list=sprints(i.fields[field]);')
 epic=s.replace('Sprint','Epic').replace('sprint-analysis','epic-analysis').replace('hub.sprint.append(host)','hub.epic.append(host)').replace('jsa-host','jea-host')
 a=epic.index('  function sprints(value) {');b=epic.index('  function statusAt(',a)
 epic=epic[:a]+(root/'src/epic-membership.js').read_text()+epic[b:]

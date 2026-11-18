@@ -19,7 +19,7 @@ function jobSlot(j,now=new Date()){
 }
 function jobLog(id,patch){const logs=GM_getValue(JOB_LOG,{});logs[id]={...logs[id],...patch,updatedAt:new Date().toISOString()};GM_setValue(JOB_LOG,logs);return logs[id];}
 hub.deliveryPayload=payload=>{
- const job=hub.jobDelivery;if(!job)return payload;
+ const job=hub.jobDelivery;if(!job||hub.jobRun)return payload;
  if(!job.email)payload.email={enabled:false};
  if(!job.teams){payload.attachments=[];payload.teams={enabled:false};payload.deliveryMode='email-only';}
  else if(!payload.teams)payload.teams={enabled:true};
@@ -35,10 +35,11 @@ async function executeJob(id,manual=false){
   if(JSON.stringify(validJob(current))!==JSON.stringify(job))throw Error('等待期间 Job 配置已变化，请重新打开。');
   const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
-  jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;
-  try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);}
-   jobLog(id,{status:'completed',message:'已完成；通知提交不代表最终送达，请查看工作流。'});
-  }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;}
+  jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;hub.jobRun={entries:[],projects:new Set(),completed:[],menu:null};
+  try{for(const menu of JOB_MENUS.filter(m=>job.menus.includes(m))){hub.jobRun.menu=menu;if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);hub.jobRun.completed.push(menu);}
+   const deliveryMessage=await hub.flushJobReports(job);
+   jobLog(id,{status:'completed',message:deliveryMessage+'；最终投递请查看工作流。'});
+  }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;hub.jobRun=null;}
  };
  if(!navigator.locks?.request)throw Error('浏览器不支持 Job 防重复锁，请使用新版 Chrome。');
  // A single origin-wide lock serializes different jobs and duplicate tabs.
@@ -76,7 +77,7 @@ hub.renderJobs=()=>{
   const select=(key,title,options)=>{const label=el('label',title+' ',card),input=el('select',null,label);for(const [v,name] of options){const o=el('option',name,input);o.value=v;}input.value=j[key];controls[key]=input;};
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic'],['risk','Risk']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
-  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
+  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。按勾选菜单 COE → Sprint → Epic → Risk 合并推送，每项目一封邮件和一个交互附件；Kanban 仅手动单独发送。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
   const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};

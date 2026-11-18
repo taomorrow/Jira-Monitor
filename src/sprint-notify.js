@@ -15,12 +15,12 @@
         const report=buildTeamsReport(projectGroups,reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl);
         const bodyText=projectKey+' · '+report.description+'\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
         report.payload.projectKey=projectKey;report.payload.reportType='sprint-analysis';
-        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,charts:comparisonChartMarkup(reportModel(projectGroups)),sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
+        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,charts:hub.jobDelivery?'':comparisonChartMarkup(reportModel(projectGroups)),sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
         const file=reportFile(projectGroups,projectKey);
         if(report.payload.email.enabled&&$('attach-report').checked){report.payload.email.attachments=[{name:file.name,contentType:'text/html',contentBytes:reportBase64(file.html)}];report.payload.email.bodyHtml+='<p style="font:12px Arial;color:#718098">附交互报告：'+hub.escapeHtml(file.name)+'。请下载附件并使用浏览器打开，点击数字查看工单明细和状态变化。</p>';}
         if(hub.jobDelivery?.email&&!report.payload.email.enabled)throw Error(projectKey+' 未配置邮件收件人');
         hub.deliveryPayload(report.payload);
-        const oversized=new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
+        const oversized=!hub.jobRun&&new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
         const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
         if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
         if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
@@ -28,6 +28,7 @@
         if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}
         return {projectKey,target,destination,report,file,emailOnly,data:JSON.stringify(report.payload)};
       });
+      if(automated&&hub.jobRun){for(const item of deliveries)hub.collectJobReport({menu:hub.jobRun.menu,projectKey:item.projectKey,target:item.target,payload:item.report.payload,file:item.file});return;}
       openTeams('项目推送预览 · '+deliveries.length+' 个项目');
       if(deliveries.some(item=>item.emailOnly))message('所选数量超过 Teams 大小限制，所选数据只通过邮件发送');
       text('p','每个项目分别发送到对应 Teams 和邮件收件人。勾选邮件附报告时，载荷另含该项目的 Jira 编号、摘要及状态变化，需工作流配置附件步骤；下方可先下载检查。',teamsBox);

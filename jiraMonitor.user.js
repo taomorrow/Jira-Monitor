@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Jira Monitor
 // @namespace    https://github.com/taomorrow/Jira
-// @version      6.12.17
+// @version      6.12.18
 // @description  COE、Sprint、Epic 分析及 Kanban 可视化；统一面板、按项目启用 Teams 和邮件通知
 // @match        https://jira.xpaas.lenovo.com/*
 // @sandbox      DOM
@@ -48,7 +48,7 @@ if(savedLauncher)placeLauncher(savedLauncher);
 launcher.addEventListener('pointerdown',event=>{if(event.button!==0)return;const box=launcher.getBoundingClientRect(),startX=event.clientX,startY=event.clientY;launcherDragged=false;let point={left:box.left,top:box.top};launcher.setPointerCapture?.(event.pointerId);const move=e=>{if(Math.hypot(e.clientX-startX,e.clientY-startY)>4)launcherDragged=true;if(launcherDragged)point=placeLauncher({left:box.left+e.clientX-startX,top:box.top+e.clientY-startY});};const end=()=>{launcher.removeEventListener('pointermove',move);launcher.removeEventListener('pointerup',end);launcher.removeEventListener('pointercancel',end);if(launcherDragged)GM_setValue('jira-monitor-launcher-v1',point);};launcher.addEventListener('pointermove',move);launcher.addEventListener('pointerup',end);launcher.addEventListener('pointercancel',end);});
 addEventListener('resize',()=>{if(launcher.style.left)placeLauncher({left:parseFloat(launcher.style.left),top:parseFloat(launcher.style.top)});});
 const shell=el('div');shell.id='shell';shell.hidden=true;shell.setAttribute('role','dialog');shell.setAttribute('aria-label','Jira Monitor');
-const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.12.17',header).id='version';
+const header=el('header',null,shell);header.id='titlebar';el('span','J',header).id='brand-icon';el('strong','Jira Monitor',header);el('span','v6.12.18',header).id='version';
 const close=el('button','❌',header);close.id='window-close';close.setAttribute('aria-label','关闭 Jira Monitor');
 const workspace=el('div',null,shell);workspace.id='workspace';const nav=el('nav',null,workspace);nav.setAttribute('aria-label','功能菜单');el('small','WORKSPACE',nav);
 const timeoutTab=el('button','◷  COE',nav),sprintTab=el('button','▥  Sprint',nav),epicTab=el('button','◈  Epic',nav),riskTab=el('button','◉  Risk',nav),kanbanTab=el('button','▦  Kanban',nav),config=el('button','⚙  Configuration',nav);timeoutTab.id='nav-timeout';sprintTab.id='nav-sprint';epicTab.id='nav-epic';config.id='nav-settings';kanbanTab.id='nav-kanban';riskTab.id='nav-risk';
@@ -171,6 +171,61 @@ async function macAppArchive(installer){
  const size=directory.reduce((n,c)=>n+c.length,0),end=new Uint8Array(22),e=new DataView(end.buffer);e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,size,true);e.setUint32(16,offset,true);
  const archive=new Uint8Array(offset+size+end.length);let index=0;for(const chunk of [...chunks,...directory,end]){archive.set(chunk,index);index+=chunk.length;}return archive;
 }
+// Offline Job attachment. Only snapshots explicitly selected in this Job are accepted.
+function jobCombinedReport(entries,project){
+ const labels={coe:'COE',sprint:'Sprint',epic:'Epic',risk:'Risk'},esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const reports=entries.map(e=>{if(!labels[e.menu]||!e.file?.html)throw Error('Job 交互报告缺失或菜单无效，未发送');return {menu:e.menu,label:labels[e.menu],name:e.file.name,html:e.file.html};});
+ const data=JSON.stringify(reports).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+ return {name:'Jira-Monitor-'+project+'-Combined-Report.html',html:'<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira Monitor · '+esc(project)+' · 合并交互报告</title><style>*{box-sizing:border-box}body{margin:0;background:#f3f6fc;color:#24334d;font:14px/1.6 Arial,Microsoft YaHei,sans-serif}header{padding:18px 24px;background:white;border-bottom:1px solid #dce5f3}h1{font-size:22px;margin:0 0 5px}p{margin:0;color:#718098}nav{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}button{font:inherit;border:1px solid #dce5f3;border-radius:8px;padding:8px 18px;background:white;color:#344b70;cursor:pointer}button[aria-selected="true"]{background:#245de8;color:white}iframe{display:block;width:100%;height:calc(100vh - 155px);min-height:500px;border:0}</style><header><h1>'+esc(project)+' · 合并交互报告</h1><p>本次 Job 扫描快照 · '+reports.map(r=>r.label).join(' / ')+' · 点击统计数字查看明细。</p><nav id="job-menus" role="tablist"></nav></header><iframe id="job-report" title="交互报告" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe><script id="job-report-data" type="application/json">'+data+'</script><script>('+jobReportRuntime.toString()+')();</script></html>'};
+}
+function jobReportRuntime(){const reports=JSON.parse(document.getElementById('job-report-data').textContent),nav=document.getElementById('job-menus'),frame=document.getElementById('job-report');function show(i){for(const [j,b] of [...nav.children].entries())b.setAttribute('aria-selected',String(i===j));frame.title=reports[i].label+' 交互报告';frame.srcdoc=reports[i].html;}for(const [i,r] of reports.entries()){const b=document.createElement('button');b.textContent=r.label;b.setAttribute('role','tab');b.onclick=()=>show(i);nav.append(b);}if(reports.length)show(0);}
+if(typeof module==='object'&&module.exports)module.exports={jobCombinedReport};
+
+// Job scans collect explicit menu snapshots; no module submits a partial Job notification.
+const JOB_MENUS=['coe','sprint','epic','risk'],JOB_LABELS={coe:'COE',sprint:'Sprint',epic:'Epic',risk:'Risk'};
+hub.noteJobScope=(values,jql='')=>{
+ if(!hub.jobRun)return;for(const value of values||[]){const key=String(typeof value==='object'?value.key:value).split('-')[0].toUpperCase();if(/^[A-Z][A-Z0-9_]*$/.test(key))hub.jobRun.projects.add(key);}
+ for(const match of String(jql).matchAll(/\bproject\s*(?:=\s*["']?([A-Z][A-Z0-9_]*)["']?|in\s*\(([^)]+)\))/gi))for(const raw of (match[1]||match[2]).split(',')){const key=raw.trim().replace(/["']/g,'').toUpperCase();if(/^[A-Z][A-Z0-9_]*$/.test(key))hub.jobRun.projects.add(key);}
+};
+hub.collectJobReport=entry=>{
+ const run=hub.jobRun;if(!run||!JOB_MENUS.includes(entry.menu)||run.menu!==entry.menu||!hub.jobDelivery.menus.includes(entry.menu))throw Error('Job 报告与所选菜单不一致，未发送');
+ const types={coe:['timeout-summary','coe-scan-summary'],sprint:['sprint-analysis'],epic:['epic-analysis'],risk:['risk']};if(!types[entry.menu].includes(entry.payload?.reportType))throw Error('Job 报告来源不正确（禁止 Kanban），未发送');
+ if(!entry.projectKey||!entry.file?.html)throw Error(JOB_LABELS[entry.menu]+' 报告快照缺失，未发送');
+ if(run.entries.some(e=>e.menu===entry.menu&&e.projectKey===entry.projectKey))throw Error('Job 出现重复菜单报告，未发送');
+ run.entries.push(JSON.parse(JSON.stringify(entry)));run.projects.add(entry.projectKey);
+};
+function jobEmptyEntry(projectKey,menu,job){
+ const title=projectKey+' · '+JOB_LABELS[menu]+' · 扫描完成',text='本项目没有符合本菜单统计条件的数据。'+(menu==='sprint'?'Sprint 已排除 CLOSED 和未分配项。':'')+'扫描时间：'+new Date().toLocaleString('zh-CN',{hour12:false});
+ const target=hub.target(projectKey+'-1');if(!target)throw Error(projectKey+' 通知未启用，未发送');const html=hub.emailCard({title,subtitle:'本次 Job 已完成扫描，无有效条目',sections:[{title:'扫描结果',headers:['项目','结果'],rows:[[JOB_LABELS[menu],text]]}],meta:'来源：本次 Job 的 '+JOB_LABELS[menu]+' 扫描。',url:job.url});
+ return {menu,projectKey,target,file:{name:'Jira-Monitor-'+JOB_LABELS[menu]+'-'+projectKey+'.html',html:'<!doctype html><meta charset="utf-8">'+html},payload:{text:title,email:{enabled:true,recipients:target.recipients||[],bodyText:text,bodyHtml:html},attachments:[{contentType:'application/vnd.microsoft.card.adaptive',content:{type:'AdaptiveCard',version:'1.2',body:[{type:'TextBlock',text:title,weight:'Bolder',wrap:true},{type:'TextBlock',text,wrap:true}]}}]}};
+}
+function jobTeamsAttachment(entries,project){
+ const cards=entries.flatMap(e=>e.payload.attachments||[]),entities=[...new Map(cards.flatMap(c=>c.content?.msteams?.entities||[]).map(e=>[e.mentioned?.id?.toLowerCase()||JSON.stringify(e),e])).values()];
+ return {contentType:'application/vnd.microsoft.card.adaptive',content:{type:'AdaptiveCard',version:'1.2',msteams:{width:'Full',entities},body:[{type:'TextBlock',text:project+' · Job · '+entries.map(e=>JOB_LABELS[e.menu]).join(' / '),size:'Large',weight:'Bolder',wrap:true},...entries.flatMap(e=>[{type:'TextBlock',text:JOB_LABELS[e.menu],size:'Medium',weight:'Bolder',separator:true,wrap:true},...(e.payload.attachments||[]).flatMap(a=>[...(a.content?.body||[]),...(a.content?.actions?.length?[{type:'ActionSet',actions:a.content.actions}]:[])])])]}};
+}
+function jobPrepareDeliveries(job){
+ const run=hub.jobRun;if(!run||job.menus.some(m=>!run.completed.includes(m)))throw Error('Job 扫描未全部完成，未发送');
+ const projects=[...new Set([...run.entries.map(e=>e.projectKey),...[...run.projects].filter(key=>hub.jobProjectAllowed(key)&&hub.target(key+'-1'))])].sort();
+ if(!projects.length)return [];
+ return projects.map(key=>{
+  const target=hub.target(key+'-1');if(!target)throw Error(key+' 通知未启用，未发送');const destination=hub.validateWebhook(target.webhook),recipients=[...(target.recipients||[])];if(job.email&&!recipients.length)throw Error(key+' 未配置邮件收件人，未发送');
+  const entries=JOB_MENUS.filter(m=>job.menus.includes(m)).map(menu=>run.entries.find(e=>e.projectKey===key&&e.menu===menu)||jobEmptyEntry(key,menu,job));
+  const recipientKey=v=>[...v].map(x=>String(x).trim().toLowerCase()).sort().join(';');for(const entry of entries)if(hub.validateWebhook(entry.target.webhook)!==destination||job.email&&recipientKey(entry.target.recipients||[])!==recipientKey(recipients))throw Error(key+' 扫描期间通知配置已变化，未发送');
+  const title=key+' · Job · '+entries.map(e=>JOB_LABELS[e.menu]).join(' / '),strip=html=>String(html||'').replace(/<p data-jira-monitor-report[\s\S]*?<\/p>/g,'').replace(/<p[^>]*>附交互报告：[\s\S]*?<\/p>/g,'');
+  const email=job.email?{enabled:true,to:recipients.join(';'),recipients,subject:'[Jira Monitor] '+title,bodyText:entries.map(e=>JOB_LABELS[e.menu]+'\n'+(e.payload.email?.bodyText||e.payload.text||'扫描完成')).join('\n\n'),bodyHtml:entries.map(e=>'<div style="margin-bottom:24px">'+strip(e.payload.email?.bodyHtml)+'</div>').join(''),attachments:[]}:{enabled:false};
+  if(job.email&&job.attach)hub.attachEmailReport(email,jobCombinedReport(entries,key));
+  const attachment=jobTeamsAttachment(entries,key),oversized=job.teams&&new TextEncoder().encode(JSON.stringify([attachment])).length>26*1024;
+  if(oversized&&!job.email)throw Error(key+' 合并 Teams 卡片超过大小限制，请启用邮件；未发送。');
+  return {key,target,destination,recipients,payload:{type:'message',reportType:'job-summary',projectKey:key,menus:entries.map(e=>e.menu),scans:entries.map(e=>({menu:e.menu,reportType:e.payload.reportType||'empty-scan',status:'completed',scanCount:e.payload.scanCount,scanTime:e.payload.scanTime})),text:title,summary:'本次 Job 扫描结果：'+entries.map(e=>JOB_LABELS[e.menu]).join(' / '),email,teams:{enabled:job.teams&&!oversized},deliveryMode:job.teams&&!oversized?'teams-and-email':'email-only',attachments:job.teams&&!oversized?[attachment]:[]},emailOnly:oversized};
+ });
+}
+hub.flushJobReports=async job=>{
+ if(!job.teams&&!job.email)return '扫描完成；未启用通知。';const deliveries=jobPrepareDeliveries(job),recipientKey=v=>v.map(x=>String(x).trim().toLowerCase()).sort().join(';');
+ const validate=d=>{const t=hub.target(d.key+'-1');if(!t||hub.validateWebhook(t.webhook)!==d.destination||job.email&&recipientKey(t.recipients||[])!==recipientKey(d.recipients))throw Error(d.key+' 通知配置已变化，未发送');};
+ deliveries.forEach(validate);const outcomes=[];for(const d of deliveries){const send=async()=>{validate(d);await new Promise((resolve,reject)=>{let settled=false,request;const finish=error=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve();};const timer=setTimeout(()=>{finish(Error('Job 合并通知超时，结果未知；未重试'));request?.abort?.();},30000);try{request=GM_xmlhttpRequest({method:'POST',url:d.destination,headers:{'Content-Type':'application/json'},data:JSON.stringify(d.payload),timeout:30000,anonymous:true,redirect:'error',onload:r=>finish(r.status>=200&&r.status<300?null:Error('Job 合并通知 HTTP '+r.status)),onerror:()=>finish(Error('Job 合并通知网络失败，结果未知')),ontimeout:()=>finish(Error('Job 合并通知超时，结果未知')),onabort:()=>finish(Error('Job 合并通知已中止，结果未知'))});}catch(error){finish(error);}});};await navigator.locks.request('jira-monitor-teams-notify',send);outcomes.push(d.key+' 已合并提交 '+d.payload.menus.map(m=>JOB_LABELS[m]).join(' / ')+(d.emailOnly?'（Teams 超限，仅邮件；附件保留全部菜单）':''));}
+ return outcomes.join('；')||'扫描完成，没有可推送的已启用项目。';
+};
+
 // Scheduled jobs contain references and preferences only; never credentials.
 const JOB_STORE='jira-monitor-jobs-v1',JOB_LOG='jira-monitor-job-runs-v1';
 hub.jobRunners={};
@@ -192,7 +247,7 @@ function jobSlot(j,now=new Date()){
 }
 function jobLog(id,patch){const logs=GM_getValue(JOB_LOG,{});logs[id]={...logs[id],...patch,updatedAt:new Date().toISOString()};GM_setValue(JOB_LOG,logs);return logs[id];}
 hub.deliveryPayload=payload=>{
- const job=hub.jobDelivery;if(!job)return payload;
+ const job=hub.jobDelivery;if(!job||hub.jobRun)return payload;
  if(!job.email)payload.email={enabled:false};
  if(!job.teams){payload.attachments=[];payload.teams={enabled:false};payload.deliveryMode='email-only';}
  else if(!payload.teams)payload.teams={enabled:true};
@@ -208,10 +263,11 @@ async function executeJob(id,manual=false){
   if(JSON.stringify(validJob(current))!==JSON.stringify(job))throw Error('等待期间 Job 配置已变化，请重新打开。');
   const old=GM_getValue(JOB_LOG,{})[id];if(!manual&&old?.slot===slot&&old.status!=='queued')return;
   if(hub.jobDelivery)throw Error('已有 Job 正在执行，请稍后再试。');
-  jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;
-  try{for(const menu of job.menus){if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);}
-   jobLog(id,{status:'completed',message:'已完成；通知提交不代表最终送达，请查看工作流。'});
-  }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;}
+  jobLog(id,{slot,status:'running',message:'正在执行 '+job.menus.join(' → ')});hub.jobDelivery=job;hub.jobRun={entries:[],projects:new Set(),completed:[],menu:null};
+  try{for(const menu of JOB_MENUS.filter(m=>job.menus.includes(m))){hub.jobRun.menu=menu;if(!hub.jobRunners[menu])throw Error(menu+' 模块尚未就绪');hub.show(menu==='coe'?'timeout':menu);await hub.jobRunners[menu](job);hub.jobRun.completed.push(menu);}
+   const deliveryMessage=await hub.flushJobReports(job);
+   jobLog(id,{status:'completed',message:deliveryMessage+'；最终投递请查看工作流。'});
+  }catch(error){jobLog(id,{status:'failed',message:String(error.message).slice(0,700)+'；未自动重试。'});throw error;}finally{hub.jobDelivery=null;hub.jobRun=null;}
  };
  if(!navigator.locks?.request)throw Error('浏览器不支持 Job 防重复锁，请使用新版 Chrome。');
  // A single origin-wide lock serializes different jobs and duplicate tabs.
@@ -249,7 +305,7 @@ hub.renderJobs=()=>{
   const select=(key,title,options)=>{const label=el('label',title+' ',card),input=el('select',null,label);for(const [v,name] of options){const o=el('option',name,input);o.value=v;}input.value=j[key];controls[key]=input;};
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic'],['risk','Risk']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
-  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
+  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。按勾选菜单 COE → Sprint → Epic → Risk 合并推送，每项目一封邮件和一个交互附件；Kanban 仅手动单独发送。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
   const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.message}`:'尚未执行',card);
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);
   el('button','删除 Job',card).onclick=()=>{entry.removed=true;card.remove();};el('button','立即运行（先保存并启用）',card).onclick=()=>{try{const saved=jobList().find(x=>x.id===j.id);if(!saved?.enabled)throw Error('请先保存并启用此 Job。');const u=new URL(saved.url);u.hash=new URLSearchParams({'jm-job':saved.id,'jm-manual':'1'});window.open(u.href,'_blank','noopener');}catch(e){status.textContent=e.message;}};
@@ -361,11 +417,11 @@ function initTimeout(detailOnly){
   const isDashboard=()=>/^\/secure\/Dashboard\.jspa$/i.test(location.pathname);
 
   const badge=document.createElement('div');
-  badge.textContent='Jira Monitor v6.12.17 已注入，正在初始化…';
+  badge.textContent='Jira Monitor v6.12.18 已注入，正在初始化…';
   badge.style.cssText='position:fixed!important;top:8px!important;right:12px!important;z-index:2147483647!important;background:#0052cc!important;color:white!important;padding:8px!important;font:13px Arial!important;max-width:80vw!important;white-space:pre-wrap!important';
   (document.body||document.documentElement).append(badge);
   function report(error) {
-    const text='Jira Monitor v6.12.17 启动失败：'+(error?.message||error);
+    const text='Jira Monitor v6.12.18 启动失败：'+(error?.message||error);
     badge.textContent=text;badge.style.background='#ae2a19';
     (document.body||document.documentElement).append(badge);
     const box=document.createElement('div');box.textContent=text+'。请检查代码开头 CONFIG 配置。';
@@ -917,7 +973,7 @@ function initTimeout(detailOnly){
     teamsSending=true;render();
     const state=JSON.parse(JSON.stringify(source)),rules=state.rules||CONFIG.rules,groups=new Map(),outcomes=[];
     for(const item of state.results||[]){if(!hasTeamsAlert(item,rules)||!hub.jobProjectAllowed(projectKeyOf(item.key)))continue;const key=projectKeyOf(item.key);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
-    if(state.phase==='done'&&GM_getValue(EMPTY_COE,false)===true){
+    if(state.phase==='done'&&(GM_getValue(EMPTY_COE,false)===true||hub.jobRun)){
       for(const key of Object.keys(state.projectCounts||{}))if(hub.jobProjectAllowed(key)&&!groups.has(key))groups.set(key,[]);
     }
     try{
@@ -931,6 +987,7 @@ function initTimeout(detailOnly){
           if(items.length&&!eligible.length)return key+'：全部工单仍在通知冷却期，跳过';
           if(hub.jobDelivery?.email&&!target.recipients.length)throw Error('未配置邮件收件人');
           const payload=hub.deliveryPayload(items.length?alertSummaryPayload(eligible,rules,target):scanSummaryPayload(state,target));
+          if(hub.jobRun){const file=items.length?hub.coeReportFile(eligible.map(item=>({item,report:teamsPayload(item,rules,true,target)})),key):{name:'Jira-Monitor-COE-'+key+'.html',html:'<!doctype html><meta charset="utf-8">'+(payload.email.bodyHtml||'<pre>'+hub.escapeHtml(payload.text)+'</pre>')};hub.collectJobReport({menu:'coe',projectKey:key,target,payload,file});return key+'：已收集 COE 扫描结果';}
           if(hub.jobDelivery&&!hub.jobDelivery.attach&&payload.email){delete payload.email.attachments;payload.email.bodyHtml=payload.email.bodyHtml?.replace(/<p data-jira-monitor-report[\s\S]*?<\/p>/g,'');}
           if(automatic){const hours=Number(CONFIG.notificationCooldownHours);if(!Number.isFinite(hours)||hours<=0)throw Error('通知冷却时间无效');for(const item of eligible)GM_setValue(alertCooldownKey(item,target),{until:Date.now()+hours*3600000,state:'submitted'});}
           await postTeams(payload,target.webhook);return key+(items.length?'：已提交 1 份预警列表（'+eligible.length+' 条工单）':'：已提交扫描摘要（无预警工单）');
@@ -1352,10 +1409,11 @@ function initTimeout(detailOnly){
     const before=get();if(busy||teamsSending||before?.active||before?.paused)throw Error('COE 存在正在运行或暂停的任务，请先完成或停止。');
     scope.value='all';await startApiBatch();const state=get();
     if(!state||state.phase!=='done'||state.paused)throw Error(state?.message||'COE 未完成，请检查登录及接口。');
+    hub.noteJobScope(Object.keys(state.projectCounts||{}),state.jql);
     if(job.teams||job.email){const outcomes=await sendBatchAlerts(state,false);if(outcomes?.some(x=>/失败|未知|跳过/.test(x)))throw Error(outcomes.join('；'));}
   };
 
-  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.12.17 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
+  render();if(ruleLoadError)notice(ruleLoadError);badge.textContent='Jira Monitor v6.12.18 已启动 · 点击显示面板';badge.onclick=()=>{mountPanel();fold.textContent='收起';body.hidden=false;body.style.display='flex';panel.style.height=`min(${CONFIG.panelHeightPx}px,75vh)`;};autoDetail();setTimeout(pump,800);
   } catch(error) { report(error); }
 }
 initTimeout();initTimeout(true);
@@ -1647,7 +1705,7 @@ initTimeout();initTimeout(true);
   async function load(){
     loadedQuery='';$('notify-project').replaceChildren();$('sprints').replaceChildren();
     await detectField();const query=await currentQuery(), issues=await search(query), map=new Map();
-    for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:'未分配 Sprint',state:''});for(const s of list)map.set(s.id,s);}
+    hub.noteJobScope(issues,query);for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:'未分配 Sprint',state:''});for(const s of list)map.set(s.id,s);}
     $('sprints').replaceChildren();
     const options=[...map.values()].sort((a,b)=>(/active/i.test(b.state)?1:0)-(/active/i.test(a.state)?1:0)||b.name.localeCompare(a.name));
     for(const s of options)choice($('sprints'),s.id,`${s.name}${s.state?' · '+s.state:''} [${s.id}]`,!hub.closedSprint(s.name+' '+s.state)&&s.id!==NONE);
@@ -1739,7 +1797,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     return {version:1,analysisType:'sprint-analysis',meta:reportMeta,jiraUrl:reportJiraUrl,period:activePeriod,generatedAt:new Date(reportNow).toISOString(),groups:source.map(group=>{const rows=rowsWithTotal(group);return {id:group.id,name:group.name,issues:group.issues.map(x=>({key:x.issue.key,summary:x.issue.fields.summary||'',assignee:x.issue.fields.assignee?.displayName||'未分配',before:x.before?.name||'',after:x.after?.name||'',changed:x.changed})),rows:rows.map((row,i)=>({name:row.name,total:i===rows.length-1,before:row.before.map(x=>x.key),after:row.after.map(x=>x.key)}))};})};
   }
   function reportFile(source=groups,project='all'){
-    return {name:'Jira-Monitor-'+project+'-'+new Date(reportNow).toISOString().replace(/[:.]/g,'-')+'.html',html:buildInteractiveReport({...reportModel(source),comparisonChart:true})};
+    return {name:'Jira-Monitor-'+project+'-'+new Date(reportNow).toISOString().replace(/[:.]/g,'-')+'.html',html:buildInteractiveReport({...reportModel(source),comparisonChart:!hub.jobDelivery})};
   }
   function downloadReport(file){const url=URL.createObjectURL(new Blob([file.html],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
   function reportBase64(html){const bytes=new TextEncoder().encode(html);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);}
@@ -1769,12 +1827,12 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         const report=buildTeamsReport(projectGroups,reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl);
         const bodyText=projectKey+' · '+report.description+'\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
         report.payload.projectKey=projectKey;report.payload.reportType='sprint-analysis';
-        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,charts:comparisonChartMarkup(reportModel(projectGroups)),sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
+        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Sprint Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Sprint Analysis',subtitle:report.description,charts:hub.jobDelivery?'':comparisonChartMarkup(reportModel(projectGroups)),sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
         const file=reportFile(projectGroups,projectKey);
         if(report.payload.email.enabled&&$('attach-report').checked){report.payload.email.attachments=[{name:file.name,contentType:'text/html',contentBytes:reportBase64(file.html)}];report.payload.email.bodyHtml+='<p style="font:12px Arial;color:#718098">附交互报告：'+hub.escapeHtml(file.name)+'。请下载附件并使用浏览器打开，点击数字查看工单明细和状态变化。</p>';}
         if(hub.jobDelivery?.email&&!report.payload.email.enabled)throw Error(projectKey+' 未配置邮件收件人');
         hub.deliveryPayload(report.payload);
-        const oversized=new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
+        const oversized=!hub.jobRun&&new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
         const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
         if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
         if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
@@ -1782,6 +1840,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}
         return {projectKey,target,destination,report,file,emailOnly,data:JSON.stringify(report.payload)};
       });
+      if(automated&&hub.jobRun){for(const item of deliveries)hub.collectJobReport({menu:hub.jobRun.menu,projectKey:item.projectKey,target:item.target,payload:item.report.payload,file:item.file});return;}
       openTeams('项目推送预览 · '+deliveries.length+' 个项目');
       if(deliveries.some(item=>item.emailOnly))message('所选数量超过 Teams 大小限制，所选数据只通过邮件发送');
       text('p','每个项目分别发送到对应 Teams 和邮件收件人。勾选邮件附报告时，载荷另含该项目的 Jira 编号、摘要及状态变化，需工作流配置附件步骤；下方可先下载检查。',teamsBox);
@@ -2175,7 +2234,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
   async function load(){
     loadedQuery='';$('notify-project').replaceChildren();$('sprints').replaceChildren();
     await detectField();const query=await currentQuery(), issues=(await search(query)).filter(isStory), map=new Map();
-    await loadEpicNames(issues);
+    hub.noteJobScope(issues,query);await loadEpicNames(issues);
     for(const i of issues){const list=sprints(i.fields[field]);if(!list.length)map.set(NONE,{id:NONE,name:'未分配 Epic',state:''});for(const s of list)map.set(s.id,s);}
     $('sprints').replaceChildren();
     const options=[...map.values()].sort((a,b)=>(/active/i.test(b.state)?1:0)-(/active/i.test(a.state)?1:0)||b.name.localeCompare(a.name));
@@ -2268,7 +2327,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
     return {version:1,analysisType:'epic-analysis',meta:reportMeta,jiraUrl:reportJiraUrl,period:activePeriod,generatedAt:new Date(reportNow).toISOString(),groups:source.map(group=>{const rows=rowsWithTotal(group);return {id:group.id,name:group.name,issues:group.issues.map(x=>({key:x.issue.key,summary:x.issue.fields.summary||'',assignee:x.issue.fields.assignee?.displayName||'未分配',before:x.before?.name||'',after:x.after?.name||'',changed:x.changed})),rows:rows.map((row,i)=>({name:row.name,total:i===rows.length-1,before:row.before.map(x=>x.key),after:row.after.map(x=>x.key)}))};})};
   }
   function reportFile(source=groups,project='all'){
-    return {name:'Jira-Monitor-'+project+'-'+new Date(reportNow).toISOString().replace(/[:.]/g,'-')+'.html',html:buildInteractiveReport({...reportModel(source),comparisonChart:true})};
+    return {name:'Jira-Monitor-'+project+'-'+new Date(reportNow).toISOString().replace(/[:.]/g,'-')+'.html',html:buildInteractiveReport({...reportModel(source),comparisonChart:!hub.jobDelivery})};
   }
   function downloadReport(file){const url=URL.createObjectURL(new Blob([file.html],{type:'text/html;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
   function reportBase64(html){const bytes=new TextEncoder().encode(html);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary);}
@@ -2298,12 +2357,12 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         const report=buildTeamsReport(projectGroups,reportMeta+'｜仅项目 '+projectKey,activePeriod,reportJiraUrl);
         const bodyText=projectKey+' · '+report.description+'\n'+report.sections.map(section=>section.name+'\n'+[report.heading,...section.rows].map(row=>row.join(' | ')).join('\n')).join('\n\n');
         report.payload.projectKey=projectKey;report.payload.reportType='epic-analysis';
-        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Epic Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Epic Analysis',subtitle:report.description,charts:comparisonChartMarkup(reportModel(projectGroups)),sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
+        report.payload.email=target.recipients.length?{enabled:true,recipients:target.recipients,to:target.recipients.join(';'),subject:'[Jira Monitor] '+projectKey+' · Epic Analysis',bodyText,bodyHtml:hub.emailCard({title:projectKey+' · Epic Analysis',subtitle:report.description,charts:hub.jobDelivery?'':comparisonChartMarkup(reportModel(projectGroups)),sections:report.sections.map(section=>({title:section.name,headers:report.heading,rows:section.rows,total:true,deltaColumn:3})),meta:reportMeta,url:reportJiraUrl})}:{enabled:false};
         const file=reportFile(projectGroups,projectKey);
         if(report.payload.email.enabled&&$('attach-report').checked){report.payload.email.attachments=[{name:file.name,contentType:'text/html',contentBytes:reportBase64(file.html)}];report.payload.email.bodyHtml+='<p style="font:12px Arial;color:#718098">附交互报告：'+hub.escapeHtml(file.name)+'。请下载附件并使用浏览器打开，点击数字查看工单明细和状态变化。</p>';}
         if(hub.jobDelivery?.email&&!report.payload.email.enabled)throw Error(projectKey+' 未配置邮件收件人');
         hub.deliveryPayload(report.payload);
-        const oversized=new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
+        const oversized=!hub.jobRun&&new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
         const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
         if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Epic 后重试。');
         if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
@@ -2311,6 +2370,7 @@ if(typeof module==='object'&&module.exports)module.exports={buildInteractiveRepo
         if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}
         return {projectKey,target,destination,report,file,emailOnly,data:JSON.stringify(report.payload)};
       });
+      if(automated&&hub.jobRun){for(const item of deliveries)hub.collectJobReport({menu:hub.jobRun.menu,projectKey:item.projectKey,target:item.target,payload:item.report.payload,file:item.file});return;}
       openTeams('项目推送预览 · '+deliveries.length+' 个项目');
       if(deliveries.some(item=>item.emailOnly))message('所选数量超过 Teams 大小限制，所选数据只通过邮件发送');
       text('p','每个项目分别发送到对应 Teams 和邮件收件人。勾选邮件附报告时，载荷另含该项目的 Jira 编号、摘要及状态变化，需工作流配置附件步骤；下方可先下载检查。',teamsBox);
@@ -2710,14 +2770,14 @@ function createRiskNotifications({hub,view,el,getModel,isBusy}){
   const file={name:'Jira-Monitor-Risk-'+key+'-'+Date.now()+'.html',html:buildKanbanReport(model)},mail=options.email?{enabled:true,to:recipients.join(';'),recipients,subject:'[Jira Monitor] '+model.title,bodyText:model.meta+'\n'+section.rows.map(r=>r.name+' · 有效 Story '+r.cells[0].keys.length+' · 未达 Completed '+r.cells[1].keys.length+' · 逾期未完成 '+r.cells[2].keys.length).join('\n'),bodyHtml:buildKanbanEmailCharts(model),attachments:[]}:{enabled:false};
   if(mail.enabled&&options.attach)hub.attachEmailReport(mail,file);
   const payload={type:'message',reportType:'risk',projectKey:key,text:model.title,summary:model.meta,jiraUrl:model.url,email:mail,teams:{enabled:options.teams},attachments:options.teams?[{contentType:'application/vnd.microsoft.card.adaptive',content:buildKanbanTeamsChart(model)}]:[]};
-  let emailOnly=false;if(payload.attachments.some(a=>new TextEncoder().encode(JSON.stringify(a)).length>26*1024)){if(!mail.enabled)throw Error(key+' Risk 卡片超出 Teams 限制，请启用邮件。');payload.attachments=[];payload.teams.enabled=false;emailOnly=true;}if(!payload.teams.enabled)payload.deliveryMode='email-only';return {key,target,destination,recipients,model,file,payload,emailOnly};
+  let emailOnly=false;if(!hub.jobRun&&payload.attachments.some(a=>new TextEncoder().encode(JSON.stringify(a)).length>26*1024)){if(!mail.enabled)throw Error(key+' Risk 卡片超出 Teams 限制，请启用邮件。');payload.attachments=[];payload.teams.enabled=false;emailOnly=true;}if(!payload.teams.enabled)payload.deliveryMode='email-only';return {key,target,destination,recipients,model,file,payload,emailOnly};
  }
  async function send(item){const current=hub.target(item.key+'-1');if(!current||current.webhook!==item.target.webhook||JSON.stringify(current.recipients||[])!==JSON.stringify(item.recipients))throw Error(item.key+' 配置已变化，未发送，请重新预览');const submit=()=>new Promise((resolve,reject)=>{let settled=false,request;const finish=(error)=>{if(settled)return;settled=true;clearTimeout(timer);error?reject(error):resolve();};const timer=setTimeout(()=>{finish(Error('Risk 推送超时，结果未知；未重试'));request?.abort?.();},30000);try{request=GM_xmlhttpRequest({method:'POST',url:item.destination,headers:{'Content-Type':'application/json'},data:JSON.stringify(item.payload),timeout:30000,anonymous:true,redirect:'error',onload:r=>finish(r.status>=200&&r.status<300?null:Error('Risk 推送 HTTP '+r.status+'；未重试')),onerror:()=>finish(Error('Risk 网络失败，结果未知；未重试')),ontimeout:()=>finish(Error('Risk 推送超时，结果未知；未重试')),onabort:()=>finish(Error('Risk 推送中止；未重试'))});}catch(error){finish(error);}});return navigator.locks?.request?navigator.locks.request('jira-monitor-teams-notify',submit):submit();}
  preview.onclick=()=>{try{if(!teams.checked&&!email.checked)throw Error('请至少选择 Teams 或邮件。');const keys=[...projects.querySelectorAll('input:checked')].map(i=>i.value);if(!keys.length)throw Error('请勾选推送项目。');const items=keys.map(key=>prepare(key,{teams:teams.checked,email:email.checked,attach:attach.checked})),dialog=el('dialog',null,view);dialog.id='risk-send-dialog';el('h3','Risk 推送预览',dialog);for(const item of items){el('h4',item.model.title,dialog);el('p','邮件：'+(item.payload.email.enabled?item.recipients.join(';'):'不发送')+'；Teams：'+(item.payload.teams.enabled?'发送':item.emailOnly?'超限，仅通过邮件发送':'不发送'),dialog);const frame=el('iframe',null,dialog);frame.setAttribute('sandbox','');frame.title='Risk 邮件与 Teams 数据预览';frame.srcdoc=buildKanbanEmailCharts(item.model);frame.style.cssText='width:100%;height:420px;border:0';el('button','下载交互报告',dialog).onclick=()=>hub.downloadFile(item.file);}
    const progress=el('p','确认后发送一次，不自动重试。',dialog);progress.id='risk-send-progress';const confirm=el('button','确认推送',dialog);confirm.id='risk-send-confirm';const close=el('button','取消',dialog);close.onclick=()=>{if(!sending)dialog.remove();};dialog.addEventListener('cancel',event=>{if(sending)event.preventDefault();else dialog.remove();});
    confirm.onclick=async()=>{if(sending)return;sending=true;confirm.disabled=close.disabled=true;refresh();const outcomes=[];try{for(const item of items){try{await send(item);outcomes.push(item.key+'：已提交，最终送达请查看工作流。');}catch(error){outcomes.push(item.key+'：'+error.message);}}}finally{sending=false;close.disabled=false;close.textContent='关闭';progress.textContent=status.textContent=outcomes.join('；');refresh();}};dialog.showModal();
   }catch(error){status.textContent=error.message;}};
- addEventListener('jira-monitor-project-config',refresh);refresh();return {refresh,sendJob:async job=>{const keys=(getModel()?.projects||[]).filter(key=>hub.jobProjectAllowed(key)&&hub.target(key+'-1'));if(!keys.length)throw Error('没有可用的已启用通知项目。');const items=keys.map(key=>prepare(key,job));for(const item of items)await send(item);}};
+ addEventListener('jira-monitor-project-config',refresh);refresh();return {refresh,sendJob:async job=>{const keys=(getModel()?.projects||[]).filter(key=>hub.jobProjectAllowed(key)&&hub.target(key+'-1'));if(!keys.length){if(hub.jobRun)return;throw Error('没有可用的已启用通知项目。');}const items=keys.map(key=>prepare(key,job));for(const item of items){if(hub.jobRun)hub.collectJobReport({menu:'risk',projectKey:item.key,target:item.target,payload:item.payload,file:item.file});else await send(item);}}};
 }
 
 // Independent Risk menu. Kanban state, controls and requests are never used.
@@ -2764,7 +2824,7 @@ function createRiskNotifications({hub,view,el,getModel,isBusy}){
    const provisional=core.model(issues,options),epicKeys=[...new Set(provisional.rows.map(i=>i.epic).filter(key=>/^[A-Z][A-Z0-9_]*-\d+$/i.test(key)))];
    for(let start=0;start<epicKeys.length;start+=50){try{const keys=epicKeys.slice(start,start+50),page=await api('/rest/api/2/search?'+new URLSearchParams({jql:'key in ('+keys.join(',')+')',fields:'summary,issuetype',maxResults:'50'}));for(const i of page.issues||[])if(keys.includes(i.key)&&(/^(epic|史诗)$/i.test(i.fields?.issuetype?.name||'')||i.fields?.issuetype?.hierarchyLevel===1))options.epicNames[i.key]=i.key+' · '+(i.fields?.summary||'');}catch{/* Optional labels never expand the Story scope. */}}
    model=core.model(issues,{...options,now:new Date()});model.projects=[...new Set(issues.filter(i=>/^(story|用户故事|故事)$/i.test(i.fields?.issuetype?.name||'')&&!i.fields?.issuetype?.subtask).map(i=>i.key.split('-')[0].toUpperCase()))];
-   createRiskView(results,model);message.textContent='截至 '+model.time+' · 当前查询 '+total+' 条 · 有效 Story '+model.rows.length+' 条；点击 Assignee 弹出 Due 风险窗口。';
+   hub.noteJobScope(model.projects,new URL(model.url).searchParams.get('jql'));createRiskView(results,model);message.textContent='截至 '+model.time+' · 当前查询 '+total+' 条 · 有效 Story '+model.rows.length+' 条；点击 Assignee 弹出 Due 风险窗口。';
    return model;
   }catch(error){model=null;results.replaceChildren();message.textContent=error.message;throw error;}finally{busy=false;load.disabled=false;notifications.refresh();}
  }

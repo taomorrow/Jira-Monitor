@@ -39,7 +39,7 @@
     teamsSending=true;render();
     const state=JSON.parse(JSON.stringify(source)),rules=state.rules||CONFIG.rules,groups=new Map(),outcomes=[];
     for(const item of state.results||[]){if(!hasTeamsAlert(item,rules)||!hub.jobProjectAllowed(projectKeyOf(item.key)))continue;const key=projectKeyOf(item.key);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);}
-    if(state.phase==='done'&&GM_getValue(EMPTY_COE,false)===true){
+    if(state.phase==='done'&&(GM_getValue(EMPTY_COE,false)===true||hub.jobRun)){
       for(const key of Object.keys(state.projectCounts||{}))if(hub.jobProjectAllowed(key)&&!groups.has(key))groups.set(key,[]);
     }
     try{
@@ -53,6 +53,7 @@
           if(items.length&&!eligible.length)return key+'：全部工单仍在通知冷却期，跳过';
           if(hub.jobDelivery?.email&&!target.recipients.length)throw Error('未配置邮件收件人');
           const payload=hub.deliveryPayload(items.length?alertSummaryPayload(eligible,rules,target):scanSummaryPayload(state,target));
+          if(hub.jobRun){const file=items.length?hub.coeReportFile(eligible.map(item=>({item,report:teamsPayload(item,rules,true,target)})),key):{name:'Jira-Monitor-COE-'+key+'.html',html:'<!doctype html><meta charset="utf-8">'+(payload.email.bodyHtml||'<pre>'+hub.escapeHtml(payload.text)+'</pre>')};hub.collectJobReport({menu:'coe',projectKey:key,target,payload,file});return key+'：已收集 COE 扫描结果';}
           if(hub.jobDelivery&&!hub.jobDelivery.attach&&payload.email){delete payload.email.attachments;payload.email.bodyHtml=payload.email.bodyHtml?.replace(/<p data-jira-monitor-report[\s\S]*?<\/p>/g,'');}
           if(automatic){const hours=Number(CONFIG.notificationCooldownHours);if(!Number.isFinite(hours)||hours<=0)throw Error('通知冷却时间无效');for(const item of eligible)GM_setValue(alertCooldownKey(item,target),{until:Date.now()+hours*3600000,state:'submitted'});}
           await postTeams(payload,target.webhook);return key+(items.length?'：已提交 1 份预警列表（'+eligible.length+' 条工单）':'：已提交扫描摘要（无预警工单）');

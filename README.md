@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.17
+# Jira Monitor v6.12.18
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -7,6 +7,17 @@
 [下载 Jira+ 扩展](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.5/JiraPlus-6.10.4.5.zip)。在 Configuration → 定时 Job 设置启用“一键合并推送”，可单选或多选 COE、Sprint、EPIC；扫描完成后按该顺序合并为每项目一封邮件和一张 Teams 卡片。邮件只附一个合并 HTML 交互报告，内含 COE / Sprint / Epic 标签与原有明细下钻。不同项目继续使用各自通知配置。超过 Teams 限制时依次只保留 COE + Sprint、仅 COE；邮件及附件保留全部结果；COE 仍超限时仅发邮件；扫描失败不发送部分结果。更新后需重新加载扩展并刷新 Jira，原有未启用合并的 Job 仍分别推送。主油猴脚本不变。
 
 6.10.4.3 已修复同一 Webhook 原始写法与规范化写法导致只发送 COE 的问题，所有目标在首次发送前统一校验，日志显示实际合并的菜单。
+
+## v6.12.18：Job 菜单与合并交互报告一致
+
+Job 严格使用“执行菜单”勾选的 COE、Sprint、Epic、Risk，按此顺序扫描并合并。所有所选扫描完成后，每项目提交一次通知：一封邮件、一张 Teams 卡片，以及一个带对应菜单页签的 HTML 交互附件。Risk 保留 Assignee → Due → Story 明细下钻；Sprint / Epic 使用原有统计表与明细，不复用 Kanban 环比图。
+
+- Kanban 不参与 Job，也不进入 Job 合并附件，继续手动独立推送。
+- 已勾选菜单没有有效条目时，保留该页签并说明空扫描结果；不会静默省略。任一菜单扫描失败，或扫描期间目标配置变化，本次汇总不发送。
+- 合并 Teams 卡片超限且已启用邮件时，仅发邮件，正文和附件保留全部所选菜单；仅启用 Teams 时报告超限错误。未启用交互附件时不附文件，不影响正文菜单。
+- 沿用项目通知开关、收件人、Webhook 和 Job 渠道设置，项目间隔离。这里只更新主脚本；Jira+ 冻结扩展和 Kanban 页面不变。
+
+验证使用模拟 Jira / Webhook，未发送真实通知。请下载 HTML 附件后使用浏览器打开。
 
 ## v6.12.17：独立 Risk 菜单与弹窗下钻
 
