@@ -1,8 +1,20 @@
 # Jira+
 
-独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.5**。
+独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.6**。
 
-[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.5/JiraPlus-6.10.4.5.zip)
+[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.6/JiraPlus-6.10.4.6.zip)
+
+6.10.4.6 新增：独立 Risk 菜单，移植主脚本 v6.12.20 的交付风险计算、Assignee → Due → Story 三级弹窗、Teams / 邮件及离线交互附件。已到期风险率严格大于 50% 标红；Teams 使用精简卡片并显示实际字节大小，不重复携带总量链接。配置里执行菜单和合并推送菜单都可选择 Risk，合并顺序 COE → Sprint → Epic → Risk，附件仍为一个带菜单页签的 HTML。原有 COE / Sprint / Epic 扫描保持冻结基线；不添加 Kanban。
+
+“保存并立即运行”先保存当前执行及推送勾选项，等待扩展存储写入后再打开任务标签，避免新勾选 Risk 未生效。定时任务仍使用已保存配置。
+
+## Risk 交付风险
+
+点击左侧 Risk → 载入当前查询，读取当前 Jira 查询全部分页的 Story 和标准 Due 字段。点击负责人弹出 Due 分组，再点击数字或风险率查看 Assignee / Due / Epic / Story / 摘要 / Status 明细，可搜索、打开 Jira。仅读取数据，不更新工单。
+
+有效 Story 排除 Done、DEPLOYED、Cancel / Cancelled / Canceled；未达 Completed 包含 New、Grooming、Open、In Progress、Ready For Test、Testing。未达 Completed 率 = 未达 Completed / 有效 Story；已到期风险率在 Due ≤ 扫描当天的有效 Story 中计算；Due < 当天且未达 Completed 才计逾期。Completed、SIT、Ready For UAT、UAT、Ready For Deploy 仍在分母。未知状态相关风险率显示 `—`；无 Due / 未分配负责人单列。按浏览器本地日期判断，指标不是延期概率。
+
+Risk 可手动选择项目及 Teams / 邮件，预览后确认一次发送；邮件附件支持离线三级下钻。Job 可选 Risk 单独或与其他菜单合并；不同项目隔离。合并 Teams 超限时沿用原缩减策略（先移除 Epic，仍超限只留 COE），明确列出省略菜单；邮件及合并附件保留所选 Risk。仅选 Risk 时会优先发送完整 Risk，仍超限且启用邮件则仅发邮件，未启用邮件则报错。扫描失败不发送合并部分结果。
 
 6.10.4.5 新增：Teams 按实际 UTF-8 字节大小逐级缩减，不会添加未勾选菜单；卡片及 Job 日志显示实际保留的菜单。邮件及交互附件完整保留。
 
@@ -12,7 +24,7 @@
 
 ## Job 一键合并推送
 
-在 Configuration → 定时 Job 设置中，勾选“一键合并推送”，选择 COE、Sprint、EPIC 中一个或多个，再启用 Teams / 邮件并保存。会先完成扫描，再按 COE → Sprint → EPIC 合并为每项目一封邮件、一张 Teams 卡片；交互报告合并为一个 HTML 附件，打开后通过 COE / Sprint / Epic 标签切换，数字下钻、Assignee 和状态变化均保留。不同项目仍按各自配置投递。合并卡片超过 Teams 限制时依次缩减为 COE + Sprint、仅 COE；邮件及单文件交互报告保持全部所选结果。仅 COE 仍超限时才仅发送邮件（需要启用邮件），不会自动拆分重复发送。扫描失败则不发送本次合并结果。原有 Job 未启用合并时保持分别推送。
+在 Configuration → 定时 Job 设置中，勾选“一键合并推送”，选择 COE、Sprint、EPIC、Risk 中一个或多个，再启用 Teams / 邮件并保存。会先完成扫描，再按 COE → Sprint → EPIC → Risk 合并为每项目一封邮件、一张 Teams 卡片；交互报告合并为一个 HTML 附件，打开后通过 COE / Sprint / Epic / Risk 标签切换，数字下钻、Assignee 和状态变化均保留。不同项目仍按各自配置投递。合并卡片超过 Teams 限制时依次缩减为 COE + Sprint、仅 COE；邮件及单文件交互报告保持全部所选结果。仅 COE 仍超限时才仅发送邮件（需要启用邮件），不会自动拆分重复发送。扫描失败则不发送本次合并结果。原有 Job 未启用合并时保持分别推送。
 
 ## Mac 安装
 
@@ -27,7 +39,7 @@
 ## 保留与隔离
 
 - 冻结基线为提交 `1c1f74ab6ac1e3383ebd9c0082369b735f17a30d` 的 6.10.4，原文件保存在 `vendor/`；不跟随仓库主脚本更新。
-- 保留 COE、Sprint、Epic、Configuration、Teams/邮件、交互报告、固定标签 Job；没有 Kanban 和 Due。
+- 保留 COE、Sprint、Epic、Configuration，新增独立 Risk；保留 Teams/邮件、交互报告、固定标签 Job；没有 Kanban 和 Due。
 - Job 沿用 6.10.4 的固定 Jira 调度标签方案：启用 Job 后把 Jira 标签设为调度页，并保持该页运行、电脑唤醒和 Jira 登录有效。没有改成浏览器后台定时器，不会唤醒电脑或启动已关闭的浏览器。
 - 扩展的 `chrome.storage.local` 独立于油猴私有存储，配置不会自动继承，也不会覆盖 v6.12.6 的配置。界面、事件和会话缓存标识使用独立 `jira-plus` 前缀。
 - 邮件仍通过配置的 Power Automate 工作流发送，HTML 附件仍需工作流正确映射附件字段。

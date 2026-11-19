@@ -1,0 +1,5 @@
+// Risk-only offline attachment; no Kanban menu or rendering is included.
+function buildKanbanReport(model){
+ const data=JSON.stringify(model).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
+ return '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jira+ · Risk</title><style>body{margin:0;background:#f5f7fc;color:#24334d;font:14px/1.6 Arial,Microsoft YaHei,sans-serif}main{max-width:1080px;margin:auto;padding:24px}h1{font-size:24px}p{color:#718098}</style><main><h1 id="title"></h1><p id="meta"></p><div id="sections"></div></main><script id="data" type="application/json">'+data+'</script><script>const createRiskCore=('+createRiskCore.toString()+'),createRiskView=('+createRiskView.toString()+');const model=JSON.parse(document.getElementById("data").textContent);document.getElementById("title").textContent=model.title;document.getElementById("meta").textContent=model.meta;createRiskView(document.getElementById("sections"),model.sections[0].risk);</script></html>';
+}
