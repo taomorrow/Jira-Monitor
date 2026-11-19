@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.19
+# Jira Monitor v6.12.20
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -7,6 +7,12 @@
 [下载 Jira+ 扩展](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.5/JiraPlus-6.10.4.5.zip)。在 Configuration → 定时 Job 设置启用“一键合并推送”，可单选或多选 COE、Sprint、EPIC；扫描完成后按该顺序合并为每项目一封邮件和一张 Teams 卡片。邮件只附一个合并 HTML 交互报告，内含 COE / Sprint / Epic 标签与原有明细下钻。不同项目继续使用各自通知配置。超过 Teams 限制时依次只保留 COE + Sprint、仅 COE；邮件及附件保留全部结果；COE 仍超限时仅发邮件；扫描失败不发送部分结果。更新后需重新加载扩展并刷新 Jira，原有未启用合并的 Job 仍分别推送。主油猴脚本不变。
 
 6.10.4.3 已修复同一 Webhook 原始写法与规范化写法导致只发送 COE 的问题，所有目标在首次发送前统一校验，日志显示实际合并的菜单。
+
+## v6.12.20：修复 Risk Teams 卡片体积回退
+
+v6.12.19 的双列指标增加了卡片 JSON 结构，同一负责人的“有效 Story”下钻还重复携带整组 Jira 编号，导致相同数据在旧版可发、新版超过脚本 26 KiB 检查线。现在精简指标结构，复用负责人容器的总量链接；子指标与总量相同时也复用链接，其他指标仍携带精确快照工单集合。已到期风险率 > 50% 标红与所有指标下钻保持不变。
+
+364 条 Story、9 位负责人的模拟样本中，旧版约 25.4 KiB，v6.12.19 约 31.2 KiB，压缩后约 21.0 KiB。Teams 预览显示实际 KiB，真实超限错误同时显示大小与 26 KiB 检查线；不提高限制、不丢弃负责人，不改变邮件与附件内容。仅 Teams、不启用邮件的模拟完整提交流程已通过，未发送真实通知。
 
 ## v6.12.19：Risk 勾选保存与执行追踪、Teams 紧凑指标
 
