@@ -20,13 +20,9 @@
         if(report.payload.email.enabled&&$('attach-report').checked){report.payload.email.attachments=[{name:file.name,contentType:'text/html',contentBytes:reportBase64(file.html)}];report.payload.email.bodyHtml+='<p style="font:12px Arial;color:#718098">附交互报告：'+hub.escapeHtml(file.name)+'。请下载附件并使用浏览器打开，点击数字查看工单明细和状态变化。</p>';}
         if(hub.jobDelivery?.email&&!report.payload.email.enabled)throw Error(projectKey+' 未配置邮件收件人');
         hub.deliveryPayload(report.payload);
-        const oversized=!hub.jobRun&&new TextEncoder().encode(JSON.stringify(report.payload.attachments)).length>26*1024;
-        const emailOnly=oversized&&report.payload.reportType==='epic-analysis';
-        if(oversized&&!emailOnly)throw Error(projectKey+' 卡片超过 Teams 大小限制，请减少所选 Sprint 后重试。');
-        if(emailOnly&&!report.payload.email.enabled)throw Error(projectKey+' 所选数量超过 Teams 大小限制，但未配置邮件收件人，请先在配置中心保存。未发送任何消息。');
-        report.payload.teams={enabled:!emailOnly&&hub.jobDelivery?.teams!==false};
-        if(emailOnly){report.payload.attachments=[];report.payload.deliveryMode='email-only';}
-        return {projectKey,target,destination,report,file,emailOnly,data:JSON.stringify(report.payload)};
+        const emailOnly=false;report.payload.teams={enabled:hub.jobDelivery?.teams!==false};
+        const payloads=hub.jobRun?[report.payload]:hub.menuTeamsPayloads(report.payload,report.payload.reportType.split('-')[0],projectKey);
+        return {projectKey,target,destination,report,file,emailOnly,data:JSON.stringify(report.payload),teamsNote:[...new Set(payloads.flatMap(payload=>(payload.attachments||[]).flatMap(a=>(a.content?.body||[]).filter(n=>n.type==='TextBlock'&&n.text?.startsWith('Epic 超限')).map(n=>n.text))))].join(' '),messages:payloads.map(payload=>({data:JSON.stringify(payload),emailOnly:payload.teams?.enabled===false}))};
       });
       if(automated&&hub.jobRun){for(const item of deliveries)hub.collectJobReport({menu:hub.jobRun.menu,projectKey:item.projectKey,target:item.target,payload:item.report.payload,file:item.file});return;}
       openTeams('项目推送预览 · '+deliveries.length+' 个项目');
@@ -42,7 +38,7 @@
         const mailPreview=text('button','预览邮件正文',card);mailPreview.onclick=()=>hub.previewEmail(item.report.payload.email);
         text('p','邮件：'+(item.target.recipients.join(';')||'未配置'),card);
         text('p','Webhook 主机：'+new URL(item.destination).hostname+'（密钥已隐藏）',card).className='muted';
-        text('p',item.report.description,card);
+        text('p',item.report.description,card);if(item.teamsNote)text('p',item.teamsNote,card);if(item.messages?.length>1)text('p','Teams 按完整分组分页；邮件只发送一次。共 '+item.messages.length+' 次提交。',card);
         for(const section of item.report.sections){
           text('h3',section.name,card);const table=document.createElement('table');card.append(table);
           const head=document.createElement('tr');table.append(head);item.report.heading.forEach(h=>text('th',h,head));
@@ -57,7 +53,7 @@
         if(typeof GM_xmlhttpRequest!=='function'){status.textContent='缺少油猴跨域请求权限，请更新脚本。';return;}
         teamsSending=true;send.disabled=true;cancel.disabled=true;
         const outcomes=[];
-        for(const item of deliveries){
+        for(const item of deliveries.flatMap(item=>(item.messages||[{data:item.data,emailOnly:item.emailOnly}]).map(message=>({...item,...message})))){
           if(!hub.target(item.projectKey+'-1')){outcomes.push(item.projectKey+'：通知已停用，跳过');continue;}
           status.textContent=[...outcomes,item.projectKey+'：正在提交…'].join('\n');
           const outcome=await new Promise(resolve=>{
@@ -70,7 +66,7 @@
               ontimeout:()=>finish('超时，结果未知，请检查工作流；未重试'),onabort:()=>finish('已中止，结果未知；未重试')});}
             catch(error){finish('请求未发出：'+teamsResponseInfo(error));}
           });
-          outcomes.push(item.projectKey+'：'+(item.emailOnly?'仅邮件 · ':'')+outcome);
+          outcomes.push(item.projectKey+'：'+(item.emailOnly?'仅邮件 · ':'')+outcome);if(item.messages?.length>1&&!outcome.startsWith('已提交')){outcomes.push('剩余未发送，未自动重试');break;}
         }
         teamsSending=false;cancel.disabled=false;cancel.textContent='关闭';status.style.whiteSpace='pre-wrap';status.textContent=outcomes.join('\n');
         return outcomes;

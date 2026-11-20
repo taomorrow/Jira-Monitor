@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.21
+# Jira Monitor v6.12.22
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -15,6 +15,14 @@
 [下载 Jira+ 扩展](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.5/JiraPlus-6.10.4.5.zip)。在 Configuration → 定时 Job 设置启用“一键合并推送”，可单选或多选 COE、Sprint、EPIC；扫描完成后按该顺序合并为每项目一封邮件和一张 Teams 卡片。邮件只附一个合并 HTML 交互报告，内含 COE / Sprint / Epic 标签与原有明细下钻。不同项目继续使用各自通知配置。超过 Teams 限制时依次只保留 COE + Sprint、仅 COE；邮件及附件保留全部结果；COE 仍超限时仅发邮件；扫描失败不发送部分结果。更新后需重新加载扩展并刷新 Jira，原有未启用合并的 Job 仍分别推送。主油猴脚本不变。
 
 6.10.4.3 已修复同一 Webhook 原始写法与规范化写法导致只发送 COE 的问题，所有目标在首次发送前统一校验，日志显示实际合并的菜单。
+
+## v6.12.22：Epic 超限候选配置与完整 Sprint 分页
+
+Configuration 新增“Epic 推送配置”，支持维护多个 Epic Key（如 `OSPIT-9421`），换行或逗号分隔，保存时验证、转大写并去重。仅当该项目 Epic Teams 卡片超限时才筛选已维护的 Epic，仍超限则按完整 Epic 分页。留空保持全部 Epic；配置在本次扫描无匹配时明确提示，不自动改回全部。扫描、邮件及合并交互附件仍保留全部所选结果。
+
+Sprint 改为按完整 Sprint 打包，保留顶部指标、全部状态行和合计，不再按 status 拆分，也不重复插入 Sprint 标题。先去除相同查询链接的重复载荷；单分组仍超限时将逐单元格链接精简成状态行查询，必要时精简为该 Sprint 全部扫描工单的查询，并明确显示说明，完整明细留在附件。极端情况下完整分组仍无法容纳时在提交前报错，不截断表格。Epic 同样按完整分组分页。
+
+适用于 Job 和 Sprint / Epic 手动推送。邮件每项目仍只发送一份；分页中途失败停止剩余提交，不自动重试。主脚本更新后刷新 Jira 和固定调度页，再到 Configuration 保存 Epic Key；独立 Jira+ 插件不变。验证使用模拟接口，未发送真实通知。
 
 ## v6.12.21：主脚本 Teams 分菜单分页与 Jira 查询链接
 

@@ -1,5 +1,5 @@
 // Scheduled jobs contain references and preferences only; never credentials.
-const JOB_VERSION='6.12.21';
+const JOB_VERSION='6.12.22';
 const JOB_STORE='jira-monitor-jobs-v1',JOB_LOG='jira-monitor-job-runs-v1';
 hub.jobRunners={};
 const jobDefaultUrl='https://jira.xpaas.lenovo.com/issues/?filter=180929';
