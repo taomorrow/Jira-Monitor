@@ -1,5 +1,5 @@
 // Scheduled jobs contain references and preferences only; never credentials.
-const JOB_VERSION='6.12.20';
+const JOB_VERSION='6.12.21';
 const JOB_STORE='jira-monitor-jobs-v1',JOB_LOG='jira-monitor-job-runs-v1';
 hub.jobRunners={};
 const jobDefaultUrl='https://jira.xpaas.lenovo.com/issues/?filter=180929';
@@ -78,7 +78,7 @@ hub.renderJobs=()=>{
   const select=(key,title,options)=>{const label=el('label',title+' ',card),input=el('select',null,label);for(const [v,name] of options){const o=el('option',name,input);o.value=v;}input.value=j[key];controls[key]=input;};
   select('days','执行日期',[['daily','每天'],['weekdays','周一至周五']]);select('period','对比维度',[['day','昨天 / 今天'],['week','上周 / 本周']]);
   const menus=el('div','执行菜单：',card),checks=[];for(const [key,name] of [['coe','COE'],['sprint','Sprint'],['epic','Epic'],['risk','Risk']]){const label=el('label',name+' ',menus),check=el('input',null,label);check.type='checkbox';check.value=key;check.checked=j.menus.includes(key);checks.push(check);}
-  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。按勾选菜单 COE → Sprint → Epic → Risk 合并推送，每项目一封邮件和一个交互附件；Kanban 仅手动单独发送。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
+  el('small','分析当前查询全部分页；Sprint 默认排除 CLOSED 和未分配项；Epic 分组及状态全部勾选；Risk 按当前 Story 的 Assignee / Due 统计，不使用历史对比维度。按勾选菜单 COE → Sprint → Epic → Risk 合并推送，每项目一封邮件和一个交互附件，Teams 超限按菜单发送、必要时分页；Kanban 仅手动单独发送。',card);field('projects','推送项目（如 CSP/OSPIT；留空为全部已启用项目）');field('teams','完成后发送 Teams','checkbox');field('email','完成后发送邮件','checkbox');field('attach','邮件附交互报告','checkbox');
   const log=GM_getValue(JOB_LOG,{})[j.id];el('small',log?`${new Date(log.updatedAt).toLocaleString('zh-CN',{hour12:false})} · ${{running:'运行中',completed:'已完成',failed:'失败',queued:'等待运行'}[log.status]||log.status} · ${log.version?'v'+log.version+' · ':''}${log.menus?'执行菜单 '+log.menus.map(m=>JOB_LABELS[m]||m).join(' / ')+' · ':''}${log.message}${log.version?'':'（旧记录，未记录版本与执行菜单，请重新运行核验）'}`:'尚未执行',card);
   const savedState=el('small',null,card);savedState.dataset.jobSaved='';
   const entry={card,removed:false,read:()=>validJob({...j,...Object.fromEntries(Object.entries(controls).map(([key,n])=>[key,n.type==='checkbox'?n.checked:n.value])),menus:checks.filter(x=>x.checked).map(x=>x.value)})};entries.push(entry);

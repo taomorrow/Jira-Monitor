@@ -1,4 +1,4 @@
-# Jira Monitor v6.12.20
+# Jira Monitor v6.12.21
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
@@ -15,6 +15,14 @@
 [下载 Jira+ 扩展](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.5/JiraPlus-6.10.4.5.zip)。在 Configuration → 定时 Job 设置启用“一键合并推送”，可单选或多选 COE、Sprint、EPIC；扫描完成后按该顺序合并为每项目一封邮件和一张 Teams 卡片。邮件只附一个合并 HTML 交互报告，内含 COE / Sprint / Epic 标签与原有明细下钻。不同项目继续使用各自通知配置。超过 Teams 限制时依次只保留 COE + Sprint、仅 COE；邮件及附件保留全部结果；COE 仍超限时仅发邮件；扫描失败不发送部分结果。更新后需重新加载扩展并刷新 Jira，原有未启用合并的 Job 仍分别推送。主油猴脚本不变。
 
 6.10.4.3 已修复同一 Webhook 原始写法与规范化写法导致只发送 COE 的问题，所有目标在首次发送前统一校验，日志显示实际合并的菜单。
+
+## v6.12.21：主脚本 Teams 分菜单分页与 Jira 查询链接
+
+把 Jira+ 6.10.4.7 的通知改进移植到主油猴脚本：Job 合并 Teams 超限时按 COE → Sprint → Epic → Risk 分别推送；单菜单仍超限时按内容分页。每页预先校验 UTF-8 字节大小，不省略菜单；无法安全拆分的单条内容在发送前报错。每项目邮件仍只发送一封、交互附件仍只有一个，保留全部勾选菜单；拆分 Teams 请求禁用邮件，避免重复。
+
+Sprint / Epic Teams 的分组名称、当前数量、状态变化、创建数和状态行数字可点击打开精确 Jira 工单集合。历史数字链接对应扫描快照参与统计的编号，打开 Jira 后展示工单当前数据；零值打开空集合。单独预览推送也保留这些查询链接。Kanban 不参与 Job，原菜单与独立 Jira+ 插件不变。
+
+途中发送失败时记录已提交邮件 / 卡片数量，停止剩余发送且不自动重试。更新主脚本后刷新工作页和固定调度页；不需要重新配置 Job。验证仅使用模拟接口，未发送真实通知。
 
 ## v6.12.20：修复 Risk Teams 卡片体积回退
 
