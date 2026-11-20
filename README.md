@@ -2,6 +2,10 @@
 
 合并 [超时预警](https://github.com/taomorrow/Jira) v5.5.4 与 [Sprint Analysis](https://github.com/taomorrow/jira-sprint-analysis) v0.1.9。
 
+## Jira+ 6.10.4.7：Teams 按菜单拆分与查询链接
+
+[下载 Jira+ 6.10.4.7](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.7/JiraPlus-6.10.4.7.zip)。Job 的合并 Teams 卡片超限时按所选菜单依次发送，单菜单超限再分页，每页按 UTF-8 字节校验，不再省略菜单。邮件及合并交互附件每项目只提交一次。Sprint / Epic 的分组、指标及状态数字支持点击打开精确工单集合。失败日志记录已提交数量且不自动重试；无法安全拆分的单条内容在发送前报错。主脚本及冻结基础源码不变。
+
 ## Jira+ 6.10.4.6：独立 Risk 与推送
 
 [下载 Jira+ 6.10.4.6](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.6/JiraPlus-6.10.4.6.zip)。在冻结 6.10.4 扩展基线上新增独立 Risk：当前查询 Story / Due 扫描、Assignee → Due → Story 弹窗下钻、Teams / 邮件及交互附件；已到期风险率 > 50% 标红，使用 v6.12.20 精简 Teams 卡片。Job 执行和合并推送均支持 Risk，顺序 COE → Sprint → Epic → Risk，邮件保留一个合并 HTML 附件。更新原目录后重新加载扩展并刷新 Jira；主油猴脚本不变。详见 [扩展说明](extensions/jira-plus/README.md)。

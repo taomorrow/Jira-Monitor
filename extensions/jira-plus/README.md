@@ -1,8 +1,12 @@
 # Jira+
 
-独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.6**。
+独立的 Chrome / Edge Manifest V3 扩展，基于 **Jira Monitor 6.10.4**，扩展版本 **6.10.4.7**。
 
-[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.6/JiraPlus-6.10.4.6.zip)
+[下载安装包](https://github.com/taomorrow/Jira-Monitor/releases/download/jira-plus-v6.10.4.7/JiraPlus-6.10.4.7.zip)
+
+6.10.4.7 新增：Job 合并 Teams 卡片超限时改为按 COE → Sprint → Epic → Risk 分菜单发送，不再删除菜单；单菜单超限再按内容分页。所有分页预先校验 UTF-8 字节大小，单页最多 26 KiB；无法安全拆分的单个明细会在提交前报错，要求缩小范围。邮件及交互附件每项目仍只发送一份，包含所有所选结果；拆分后的 Teams 请求关闭邮件，避免重复邮件。发送中断时日志记录已提交邮件 / 卡片数量，不自动重试。
+
+Sprint / Epic Teams 的分组名称、当前数量、状态变化、创建数，以及状态行的昨日、今日、增减与环比数字可点击打开 Jira。链接使用对应扫描快照的精确工单编号，历史统计数字对应当时参与统计的工单集合，查询打开后显示 Jira 当前数据；零值打开空集合。各菜单统计说明的切换标识也按菜单隔离。
 
 6.10.4.6 新增：独立 Risk 菜单，移植主脚本 v6.12.20 的交付风险计算、Assignee → Due → Story 三级弹窗、Teams / 邮件及离线交互附件。已到期风险率严格大于 50% 标红；Teams 使用精简卡片并显示实际字节大小，不重复携带总量链接。配置里执行菜单和合并推送菜单都可选择 Risk，合并顺序 COE → Sprint → Epic → Risk，附件仍为一个带菜单页签的 HTML。原有 COE / Sprint / Epic 扫描保持冻结基线；不添加 Kanban。
 
@@ -14,7 +18,7 @@
 
 有效 Story 排除 Done、DEPLOYED、Cancel / Cancelled / Canceled；未达 Completed 包含 New、Grooming、Open、In Progress、Ready For Test、Testing。未达 Completed 率 = 未达 Completed / 有效 Story；已到期风险率在 Due ≤ 扫描当天的有效 Story 中计算；Due < 当天且未达 Completed 才计逾期。Completed、SIT、Ready For UAT、UAT、Ready For Deploy 仍在分母。未知状态相关风险率显示 `—`；无 Due / 未分配负责人单列。按浏览器本地日期判断，指标不是延期概率。
 
-Risk 可手动选择项目及 Teams / 邮件，预览后确认一次发送；邮件附件支持离线三级下钻。Job 可选 Risk 单独或与其他菜单合并；不同项目隔离。合并 Teams 超限时沿用原缩减策略（先移除 Epic，仍超限只留 COE），明确列出省略菜单；邮件及合并附件保留所选 Risk。仅选 Risk 时会优先发送完整 Risk，仍超限且启用邮件则仅发邮件，未启用邮件则报错。扫描失败不发送合并部分结果。
+Risk 可手动选择项目及 Teams / 邮件，预览后确认一次发送；邮件附件支持离线三级下钻。Job 可选 Risk 单独或与其他菜单合并；不同项目隔离。合并 Teams 超限时按菜单分别发送，单个 Risk 仍超限时分页；邮件及合并附件保留所选 Risk。扫描失败不发送合并部分结果。
 
 6.10.4.5 新增：Teams 按实际 UTF-8 字节大小逐级缩减，不会添加未勾选菜单；卡片及 Job 日志显示实际保留的菜单。邮件及交互附件完整保留。
 
@@ -24,7 +28,7 @@ Risk 可手动选择项目及 Teams / 邮件，预览后确认一次发送；邮
 
 ## Job 一键合并推送
 
-在 Configuration → 定时 Job 设置中，勾选“一键合并推送”，选择 COE、Sprint、EPIC、Risk 中一个或多个，再启用 Teams / 邮件并保存。会先完成扫描，再按 COE → Sprint → EPIC → Risk 合并为每项目一封邮件、一张 Teams 卡片；交互报告合并为一个 HTML 附件，打开后通过 COE / Sprint / Epic / Risk 标签切换，数字下钻、Assignee 和状态变化均保留。不同项目仍按各自配置投递。合并卡片超过 Teams 限制时依次缩减为 COE + Sprint、仅 COE；邮件及单文件交互报告保持全部所选结果。仅 COE 仍超限时才仅发送邮件（需要启用邮件），不会自动拆分重复发送。扫描失败则不发送本次合并结果。原有 Job 未启用合并时保持分别推送。
+在 Configuration → 定时 Job 设置中，勾选“一键合并推送”，选择 COE、Sprint、EPIC、Risk 中一个或多个，再启用 Teams / 邮件并保存。会先完成扫描，再按 COE → Sprint → EPIC → Risk 合并为每项目一封邮件、一张 Teams 卡片；交互报告合并为一个 HTML 附件，打开后通过 COE / Sprint / Epic / Risk 标签切换，数字下钻、Assignee 和状态变化均保留。不同项目仍按各自配置投递。合并卡片超过 Teams 检查线时按菜单发送，单菜单仍超限则分页；邮件及单文件交互报告每项目只发一份，保持全部所选结果。仅启用 Teams 也可以分页，不强制启用邮件。扫描失败则不发送本次合并结果。原有 Job 未启用合并时保持分别推送。
 
 ## Mac 安装
 
